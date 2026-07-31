@@ -1,0 +1,44 @@
+#!/usr/bin/env node
+
+const args = process.argv.slice(2);
+let kind = "completed";
+let title = "Agent update";
+let url = "";
+const body = [];
+
+for (let index = 0; index < args.length; index += 1) {
+  const arg = args[index];
+  if (arg === "--kind") kind = args[++index] ?? kind;
+  else if (arg === "--title") title = args[++index] ?? title;
+  else if (arg === "--url") url = args[++index] ?? url;
+  else body.push(arg);
+}
+
+const endpoint = process.env.SWITCHYARD_NOTIFY_URL;
+const token = process.env.SWITCHYARD_NOTIFY_TOKEN;
+const projectId = process.env.SWITCHYARD_PROJECT_ID;
+
+if (!endpoint || !token || !projectId) {
+  console.error("switchyard-notify: run inside a Switchyard terminal");
+  process.exit(2);
+}
+
+const response = await fetch(endpoint, {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    projectId,
+    kind,
+    title,
+    body: body.join(" "),
+    url: url || `/p/${projectId}/terminal`,
+  }),
+});
+
+if (!response.ok) {
+  console.error(`switchyard-notify: server returned ${response.status}`);
+  process.exit(1);
+}

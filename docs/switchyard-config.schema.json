@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://switchyard.local/schemas/switchyard-config.schema.json",
+  "title": "Switchyard configuration",
+  "description": "Static project, plugin, terminal, server, and notification configuration for Switchyard.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["projects"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional editor schema reference; accepted and ignored at runtime."
+    },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Listen address. Non-loopback values also require SWITCHYARD_UNSAFE_BIND=1."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "default": 4317
+        },
+        "allowedOrigins": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "default": [],
+          "description": "Additional exact browser origins accepted for mutations and WebSocket upgrades."
+        },
+        "allowedTailscaleUsers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "email"
+          },
+          "default": [],
+          "description": "Allowlist for a present Tailscale-User-Login. Empty accepts any present login permitted by tailnet policy; proxy-marked requests without identity are rejected."
+        }
+      }
+    },
+    "projects": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/project"
+      }
+    },
+    "pluginDirectories": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Plugin roots or directories whose immediate children are plugin roots."
+    },
+    "terminal": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "shell": {
+          "type": "string",
+          "description": "Shell executable. Defaults to SHELL, then /bin/sh."
+        },
+        "shellArgs": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "default": ["-l"]
+        },
+        "scrollbackBytes": {
+          "type": "integer",
+          "minimum": 65536,
+          "maximum": 16777216,
+          "default": 1048576,
+          "description": "Per-session replay ring size in bytes."
+        },
+        "maxSessionsPerProject": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 24,
+          "default": 8
+        }
+      }
+    },
+    "notifications": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "vapidSubject": {
+          "type": "string",
+          "pattern": "^(mailto:|https:\\/\\/)",
+          "default": "mailto:switchyard@localhost",
+          "description": "VAPID contact URI sent to push services."
+        }
+      }
+    }
+  },
+  "$defs": {
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "path"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,62}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Existing project directory; relative paths resolve from the config file."
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "default": "#67d5b5"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Project map</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        color: #e7ecf4;
+        background: #0b0e14;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at 80% -20%, rgb(103 213 181 / 10%), transparent 45%), #0b0e14;
+      }
+
+      main {
+        width: min(1100px, 100%);
+        margin: 0 auto;
+        padding: 40px clamp(18px, 5vw, 64px) 80px;
+      }
+
+      header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 28px;
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        color: #67d5b5;
+        font:
+          700 11px/1.2 ui-monospace,
+          monospace;
+        letter-spacing: 0.16em;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(30px, 6vw, 54px);
+        line-height: 1;
+        letter-spacing: -0.04em;
+      }
+
+      .path {
+        margin: 12px 0 0;
+        color: #7f8da3;
+        font:
+          13px/1.4 ui-monospace,
+          monospace;
+      }
+
+      .branch {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 34px;
+        padding: 0 12px;
+        border: 1px solid #283142;
+        border-radius: 999px;
+        color: #aab5c6;
+        font-size: 12px;
+      }
+
+      .branch span {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #67d5b5;
+        box-shadow: 0 0 14px #67d5b5;
+      }
+
+      .pulse {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        border-block: 1px solid #283142;
+      }
+
+      .pulse article {
+        display: grid;
+        gap: 5px;
+        padding: 20px 16px;
+        border-right: 1px solid #283142;
+      }
+
+      .pulse article:last-child {
+        border-right: 0;
+      }
+
+      .pulse strong {
+        font:
+          500 clamp(24px, 4vw, 34px) / 1 ui-monospace,
+          monospace;
+      }
+
+      .pulse span,
+      .section-head span,
+      .size {
+        color: #7f8da3;
+        font-size: 11px;
+      }
+
+      .pulse .warm strong {
+        color: #f2b84b;
+      }
+
+      .tree-panel {
+        margin-top: 34px;
+        overflow: hidden;
+        border: 1px solid #283142;
+        border-radius: 8px;
+        background: rgb(18 23 34 / 74%);
+      }
+
+      .section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 48px;
+        padding: 0 16px;
+        border-bottom: 1px solid #283142;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .tree {
+        max-height: min(65vh, 720px);
+        margin: 0;
+        padding: 8px 0;
+        overflow: auto;
+        list-style: none;
+      }
+
+      .tree-row {
+        --indent: calc(var(--depth) * 19px);
+        display: grid;
+        grid-template-columns: var(--indent) 16px minmax(0, 1fr) auto;
+        align-items: center;
+        min-height: 30px;
+        padding: 0 16px;
+        color: #aab5c6;
+        font:
+          12px/1.3 ui-monospace,
+          monospace;
+      }
+
+      .tree-row:hover {
+        background: rgb(103 213 181 / 5%);
+        color: #e7ecf4;
+      }
+
+      .stem {
+        height: 100%;
+        border-right: 1px solid rgb(40 49 66 / 70%);
+      }
+
+      .glyph {
+        color: #67d5b5;
+        text-align: center;
+      }
+
+      .entry-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .size {
+        padding-left: 16px;
+        font-family: ui-monospace, monospace;
+      }
+
+      .loading,
+      .error {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 60vh;
+        color: #909cb0;
+      }
+
+      .loading span {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #67d5b5;
+        animation: pulse 1.2s infinite;
+      }
+
+      .error {
+        flex-direction: column;
+        align-items: flex-start;
+        color: #ff6b78;
+      }
+
+      @keyframes pulse {
+        50% {
+          opacity: 0.25;
+          transform: scale(0.7);
+        }
+      }
+
+      @media (max-width: 680px) {
+        main {
+          padding-top: 24px;
+        }
+
+        header {
+          display: grid;
+        }
+
+        .branch {
+          width: fit-content;
+        }
+
+        .pulse {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .pulse article:nth-child(2) {
+          border-right: 0;
+        }
+
+        .pulse article:nth-child(-n + 2) {
+          border-bottom: 1px solid #283142;
+        }
+
+        .tree {
+          max-height: none;
+          overflow: visible;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app">
+      <div class="loading" role="status"><span></span> Reading project…</div>
+    </main>
+    <script type="module">
+      const app = document.querySelector("#app");
+      const pending = new Map();
+      let port;
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;");
+      }
+
+      function call(method, params) {
+        const id = crypto.randomUUID();
+        return new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            pending.delete(id);
+            reject(new Error(`${method} timed out`));
+          }, 15_000);
+          pending.set(id, { resolve, reject, timeout });
+          port.postMessage({ kind: "request", id, method, params });
+        });
+      }
+
+      function sizeLabel(bytes = 0) {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+        return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+      }
+
+      async function render() {
+        port.postMessage({ kind: "event", name: "status", payload: { state: "busy" } });
+        const [project, tree, git] = await Promise.all([
+          call("project.metadata"),
+          call("project.tree", { depth: 4, limit: 800 }),
+          call("project.git"),
+        ]);
+
+        const directories = tree.filter((entry) => entry.kind === "directory").length;
+        const files = tree.filter((entry) => entry.kind === "file").length;
+        const changes = git.staged + git.modified + git.untracked;
+        const rows = tree
+          .map(
+            (entry) => `
+              <li class="tree-row ${entry.kind}" style="--depth: ${entry.depth}">
+                <span class="stem"></span>
+                <span class="glyph" aria-hidden="true">${entry.kind === "directory" ? "⌑" : entry.kind === "symlink" ? "↗" : "·"}</span>
+                <span class="entry-name">${escapeHtml(entry.name)}</span>
+                ${entry.kind === "file" ? `<span class="size">${sizeLabel(entry.size)}</span>` : ""}
+              </li>`,
+          )
+          .join("");
+
+        app.innerHTML = `
+          <header>
+            <div>
+              <p class="eyebrow">PROJECT TOPOLOGY</p>
+              <h1>${escapeHtml(project.name)}</h1>
+              <p class="path">${escapeHtml(project.displayPath)}</p>
+            </div>
+            <div class="branch"><span></span>${escapeHtml(git.branch || "not a git worktree")}</div>
+          </header>
+          <section class="pulse" aria-label="Project summary">
+            <article><strong>${directories}</strong><span>directories</span></article>
+            <article><strong>${files}</strong><span>files mapped</span></article>
+            <article class="${changes ? "warm" : ""}"><strong>${changes}</strong><span>working changes</span></article>
+            <article><strong>${git.ahead}/${git.behind}</strong><span>ahead / behind</span></article>
+          </section>
+          <section class="tree-panel">
+            <div class="section-head"><h2>Structure</h2><span>${tree.length >= 800 ? "first 800 entries" : `${tree.length} entries`}</span></div>
+            <ol class="tree">${rows}</ol>
+          </section>`;
+        port.postMessage({
+          kind: "event",
+          name: "status",
+          payload: {
+            state: changes ? "attention" : "idle",
+            badge: changes ? String(changes) : null,
+          },
+        });
+      }
+
+      function receiveHost(event) {
+        if (
+          event.source !== window.parent ||
+          event.data?.type !== "switchyard:init" ||
+          !event.ports[0]
+        )
+          return;
+        if (event.data.context?.apiVersion !== "1.0") {
+          event.ports[0].close();
+          app.innerHTML = `<div class="error" role="alert"><strong>Project map is incompatible</strong><p>Expected Switchyard plugin API 1.0.</p></div>`;
+          return;
+        }
+        window.removeEventListener("message", receiveHost);
+        port = event.ports[0];
+        port.onmessage = ({ data }) => {
+          if (data?.kind !== "response") return;
+          const request = pending.get(data.id);
+          if (!request) return;
+          pending.delete(data.id);
+          clearTimeout(request.timeout);
+          if (data.ok) request.resolve(data.result);
+          else request.reject(new Error(data.error));
+        };
+        port.start();
+        port.postMessage({ kind: "ready", nonce: event.data.nonce });
+        render().catch((error) => {
+          app.innerHTML = `<div class="error" role="alert"><strong>Project map failed</strong><p>${escapeHtml(error.message)}</p></div>`;
+          port.postMessage({ kind: "event", name: "status", payload: { state: "error" } });
+        });
+      }
+
+      window.addEventListener("message", receiveHost);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "$schema": "./docs/switchyard-config.schema.json",
+  "server": {
+    "host": "127.0.0.1",
+    "port": 4317
+  },
+  "projects": [
+    {
+      "id": "switchyard",
+      "name": "Switchyard",
+      "path": ".",
+      "color": "#67d5b5"
+    }
+  ],
+  "pluginDirectories": ["./examples/plugins"],
+  "terminal": {
+    "scrollbackBytes": 1048576
+  },
+  "notifications": {
+    "vapidSubject": "mailto:switchyard@localhost"
+  }
+}

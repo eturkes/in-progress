@@ -1,0 +1,6 @@
+packages:
+  - packages/*
+allowBuilds:
+  bun: true
+minimumReleaseAgeExclude:
+  - "@types/react@19.2.18"

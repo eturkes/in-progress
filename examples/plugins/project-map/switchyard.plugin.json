@@ -1,0 +1,11 @@
+{
+  "apiVersion": "1.0",
+  "id": "project-map",
+  "name": "Project map",
+  "version": "1.0.0",
+  "description": "Reference view: project structure and Git pulse",
+  "entry": "index.html",
+  "assets": [],
+  "icon": "git-branch",
+  "capabilities": ["project.metadata", "project.tree", "project.git"]
+}

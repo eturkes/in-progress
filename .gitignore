@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.data/
+.pnpm-store/
+coverage/
+*.log
+*.tsbuildinfo
+.DS_Store
+
+# Local overrides; commit switchyard.config.json as the safe baseline.
+switchyard.config.local.json
