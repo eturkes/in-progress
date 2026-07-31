@@ -6,7 +6,7 @@ import "./fonts.css";
 import "./styles.css";
 
 const root = document.querySelector<HTMLDivElement>("#root");
-if (!root) throw new Error("Switchyard root element is missing");
+if (!root) throw new Error("in-progress root element is missing");
 
 function syncVisualViewport(): void {
   const viewport = window.visualViewport;

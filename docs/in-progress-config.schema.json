@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://switchyard.local/schemas/switchyard-config.schema.json",
-  "title": "Switchyard configuration",
-  "description": "Static project, plugin, terminal, server, and notification configuration for Switchyard.",
+  "$id": "https://in-progress.local/schemas/in-progress-config.schema.json",
+  "title": "in-progress configuration",
+  "description": "Static project, plugin, terminal, server, and notification configuration for in-progress.",
   "type": "object",
   "additionalProperties": false,
   "required": ["projects"],
@@ -19,7 +19,7 @@
         "host": {
           "type": "string",
           "default": "127.0.0.1",
-          "description": "Listen address. Non-loopback values also require SWITCHYARD_UNSAFE_BIND=1."
+          "description": "Listen address. Non-loopback values also require IN_PROGRESS_UNSAFE_BIND=1."
         },
         "port": {
           "type": "integer",
@@ -103,7 +103,7 @@
         "vapidSubject": {
           "type": "string",
           "pattern": "^(mailto:|https:\\/\\/)",
-          "default": "mailto:switchyard@localhost",
+          "default": "mailto:in-progress@localhost",
           "description": "VAPID contact URI sent to push services."
         }
       }

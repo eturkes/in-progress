@@ -1,6 +1,6 @@
 # Plugin system v1
 
-A Switchyard plugin is a **static project view**, not an in-process module. It may use any frontend stack and live in a separate repository. Installation is an explicit local-directory configuration; Switchyard executes no package manager, build hook, server, or plugin backend.
+An in-progress plugin is a **static project view**, not an in-process module. It may use any frontend stack and live in a separate repository. Installation is an explicit local-directory configuration; in-progress executes no package manager, build hook, server, or plugin backend.
 
 ```text
 plugin iframe (opaque origin)
@@ -20,24 +20,24 @@ Build the plugin repository to a self-contained static directory:
 
 ```text
 dist/
-├── switchyard.plugin.json
+├── in-progress.plugin.json
 ├── index.html
 └── assets/
     └── app.js
 ```
 
-Reference that directory from Switchyard configuration:
+Reference that directory from in-progress configuration:
 
 ```json
 {
   "pluginDirectories": [
-    "/home/me/Projects/switchyard-project-map/dist",
-    "/home/me/Projects/switchyard-plugins"
+    "/home/me/Projects/in-progress-project-map/dist",
+    "/home/me/Projects/in-progress-plugins"
   ]
 }
 ```
 
-Each configured path may itself contain `switchyard.plugin.json`; otherwise Switchyard scans its immediate child directories/symlinks as plugin roots. It does not recurse further. Paths are resolved relative to the config file, canonicalized, and must exist. Restart Switchyard after changing manifests/assets.
+Each configured path may itself contain `in-progress.plugin.json`; otherwise in-progress scans its immediate child directories/symlinks as plugin roots. It does not recurse further. Paths are resolved relative to the config file, canonicalized, and must exist. Restart in-progress after changing manifests/assets.
 
 At startup the registry:
 
@@ -86,7 +86,7 @@ The validator also requires unique capabilities, an HTML entry document, at most
 | `icon`         | Optional: `blocks`, `chart`, `files`, `git-branch`, `globe`, `sparkles`; default `blocks` |
 | `capabilities` | Optional unique intent list; at most 16; default empty                                    |
 
-Unknown fields fail validation. `terminal` is reserved for the built-in host view. A future incompatible host protocol receives a new API version; plugins must never infer compatibility from Switchyard’s application version.
+Unknown fields fail validation. `terminal` is reserved for the built-in host view. A future incompatible host protocol receives a new API version; plugins must never infer compatibility from in-progress’s application version.
 
 ## Isolation
 
@@ -124,7 +124,7 @@ The host creates one `MessageChannel` per plugin frame/project and sends one ini
 
 ```ts
 {
-  type: "switchyard:init",
+  type: "in-progress:init",
   nonce: string,
   context: {
     apiVersion: "1.0",
@@ -153,12 +153,12 @@ The initialization context exposes only the identity needed to label the selecte
 
 ## SDK
 
-`@switchyard/plugin-sdk` implements handshake, version/capability checks, 15-second RPC timeouts, disposal, and typed context:
+`@in-progress/plugin-sdk` implements handshake, version/capability checks, 15-second RPC timeouts, disposal, and typed context:
 
 ```ts
-import { connectSwitchyard } from "@switchyard/plugin-sdk";
+import { connectInProgress } from "@in-progress/plugin-sdk";
 
-const host = await connectSwitchyard();
+const host = await connectInProgress();
 const [project, tree, git] = await Promise.all([
   host.call("project.metadata"),
   host.call("project.tree", { depth: 4, limit: 800 }),
@@ -174,11 +174,11 @@ Separate repositories may consume the built package, copy its generated declarat
 For an unpublished local checkout, build the SDK once and link it from the plugin repository:
 
 ```sh
-pnpm --dir /absolute/path/to/switchyard build:sdk
-pnpm add file:/absolute/path/to/switchyard/packages/plugin-sdk
+pnpm --dir /absolute/path/to/in-progress build:sdk
+pnpm add file:/absolute/path/to/in-progress/packages/plugin-sdk
 ```
 
-Keep emitted asset URLs relative to the plugin root and list every emitted file other than the entry in `assets`. Vite plugins use `defineConfig({ base: "./" })`; its default root-absolute `/assets/*` targets the Switchyard host instead and is blocked by plugin CSP. A single-file HTML build avoids both path and opaque-frame extension failures.
+Keep emitted asset URLs relative to the plugin root and list every emitted file other than the entry in `assets`. Vite plugins use `defineConfig({ base: "./" })`; its default root-absolute `/assets/*` targets the in-progress host instead and is blocked by plugin CSP. A single-file HTML build avoids both path and opaque-frame extension failures.
 
 Raw requests and responses on the port:
 

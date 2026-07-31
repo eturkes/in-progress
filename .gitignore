@@ -7,5 +7,5 @@ coverage/
 *.tsbuildinfo
 .DS_Store
 
-# Local overrides; commit switchyard.config.json as the safe baseline.
-switchyard.config.local.json
+# Local overrides; commit in-progress.config.json as the safe baseline.
+in-progress.config.local.json

@@ -38,7 +38,7 @@ export class StateStore {
       mkdirSync(dataDir, { recursive: true, mode: 0o700 });
       chmodSync(dataDir, 0o700);
     }
-    const path = memory ? ":memory:" : join(dataDir, "switchyard.db");
+    const path = memory ? ":memory:" : join(dataDir, "in-progress.db");
     this.#db = new Database(path, { create: true, strict: true });
     if (!memory) chmodSync(path, 0o600);
     this.#db.exec(

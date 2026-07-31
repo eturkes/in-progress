@@ -26,7 +26,7 @@ function within(root: string, candidate: string): boolean {
 }
 
 function manifestCandidates(configuredRoot: string): string[] {
-  const direct = join(configuredRoot, "switchyard.plugin.json");
+  const direct = join(configuredRoot, "in-progress.plugin.json");
   if (existsSync(direct)) return [configuredRoot];
   const candidates: string[] = [];
   for (const entry of readdirSync(configuredRoot, { withFileTypes: true })) {
@@ -47,7 +47,7 @@ export class PluginRegistry {
 
   #load(rawRoot: string): void {
     const root = realpathSync(rawRoot);
-    const manifestPath = join(root, "switchyard.plugin.json");
+    const manifestPath = join(root, "in-progress.plugin.json");
     if (!existsSync(manifestPath)) return;
     const manifest = PluginManifestSchema.parse(JSON.parse(readFileSync(manifestPath, "utf8")));
     if (this.#plugins.has(manifest.id)) throw new Error(`Duplicate plugin id: ${manifest.id}`);

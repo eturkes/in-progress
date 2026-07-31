@@ -1,4 +1,4 @@
-export const SWITCHYARD_PLUGIN_API_VERSION = "1.0" as const;
+export const IN_PROGRESS_PLUGIN_API_VERSION = "1.0" as const;
 
 export type Capability =
   | "project.metadata"
@@ -83,7 +83,7 @@ export interface PluginTheme {
 }
 
 export interface PluginContext {
-  apiVersion: typeof SWITCHYARD_PLUGIN_API_VERSION;
+  apiVersion: typeof IN_PROGRESS_PLUGIN_API_VERSION;
   capabilities: Capability[];
   project: PluginProject;
   theme: PluginTheme;
@@ -96,7 +96,7 @@ export type PluginStatus = {
 };
 
 type InitMessage = {
-  type: "switchyard:init";
+  type: "in-progress:init";
   nonce: string;
   context: PluginContext;
 };
@@ -105,7 +105,7 @@ type RpcResponse =
   | { kind: "response"; id: string; ok: true; result: unknown }
   | { kind: "response"; id: string; ok: false; error: string };
 
-export class SwitchyardClient {
+export class InProgressClient {
   readonly context: PluginContext;
   readonly #port: MessagePort;
   readonly #pending = new Map<
@@ -167,16 +167,16 @@ export class SwitchyardClient {
   }
 }
 
-export function connectSwitchyard(timeoutMs = 10_000): Promise<SwitchyardClient> {
+export function connectInProgress(timeoutMs = 10_000): Promise<InProgressClient> {
   return new Promise((resolve, reject) => {
     const timer = window.setTimeout(() => {
       window.removeEventListener("message", receive);
-      reject(new Error("Switchyard host handshake timed out"));
+      reject(new Error("in-progress host handshake timed out"));
     }, timeoutMs);
 
     function receive(event: MessageEvent<InitMessage>): void {
-      if (event.source !== window.parent || event.data?.type !== "switchyard:init") return;
-      if (event.data.context.apiVersion !== SWITCHYARD_PLUGIN_API_VERSION) {
+      if (event.source !== window.parent || event.data?.type !== "in-progress:init") return;
+      if (event.data.context.apiVersion !== IN_PROGRESS_PLUGIN_API_VERSION) {
         window.clearTimeout(timer);
         window.removeEventListener("message", receive);
         event.ports[0]?.close();
@@ -188,7 +188,7 @@ export function connectSwitchyard(timeoutMs = 10_000): Promise<SwitchyardClient>
       window.clearTimeout(timer);
       window.removeEventListener("message", receive);
       port.postMessage({ kind: "ready", nonce: event.data.nonce });
-      resolve(new SwitchyardClient(port, event.data.context));
+      resolve(new InProgressClient(port, event.data.context));
     }
 
     window.addEventListener("message", receive);

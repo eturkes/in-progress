@@ -5,7 +5,7 @@ import { loadConfig } from "../src/server/config";
 import { removeDirectory, tempDirectory, writeJson } from "./helpers";
 
 const roots: string[] = [];
-const originalUnsafeBind = process.env.SWITCHYARD_UNSAFE_BIND;
+const originalUnsafeBind = process.env.IN_PROGRESS_UNSAFE_BIND;
 
 function root(): string {
   const path = tempDirectory("config");
@@ -15,8 +15,8 @@ function root(): string {
 
 afterEach(() => {
   for (const path of roots.splice(0)) removeDirectory(path);
-  if (originalUnsafeBind === undefined) delete process.env.SWITCHYARD_UNSAFE_BIND;
-  else process.env.SWITCHYARD_UNSAFE_BIND = originalUnsafeBind;
+  if (originalUnsafeBind === undefined) delete process.env.IN_PROGRESS_UNSAFE_BIND;
+  else process.env.IN_PROGRESS_UNSAFE_BIND = originalUnsafeBind;
 });
 
 describe("loadConfig", () => {
@@ -27,7 +27,7 @@ describe("loadConfig", () => {
     mkdirSync(project);
     mkdirSync(plugins);
     symlinkSync("plugin-dist", join(directory, "plugins"));
-    const configPath = join(directory, "switchyard.config.json");
+    const configPath = join(directory, "in-progress.config.json");
     writeJson(configPath, {
       projects: [{ id: "demo", name: "Demo", path: "./workspace" }],
       pluginDirectories: ["./plugins"],
@@ -58,23 +58,23 @@ describe("loadConfig", () => {
   test("rejects a non-loopback bind unless the explicit unsafe switch is enabled", async () => {
     const directory = root();
     mkdirSync(join(directory, "workspace"));
-    const configPath = join(directory, "switchyard.config.json");
+    const configPath = join(directory, "in-progress.config.json");
     writeJson(configPath, {
       server: { host: "0.0.0.0" },
       projects: [{ id: "demo", name: "Demo", path: "workspace" }],
     });
-    delete process.env.SWITCHYARD_UNSAFE_BIND;
+    delete process.env.IN_PROGRESS_UNSAFE_BIND;
 
     await expect(loadConfig(configPath)).rejects.toThrow("Refusing non-loopback bind (0.0.0.0)");
 
-    process.env.SWITCHYARD_UNSAFE_BIND = "1";
+    process.env.IN_PROGRESS_UNSAFE_BIND = "1";
     expect((await loadConfig(configPath)).server.host).toBe("0.0.0.0");
   });
 
   test("rejects duplicate project ids after schema validation", async () => {
     const directory = root();
     mkdirSync(join(directory, "workspace"));
-    const configPath = join(directory, "switchyard.config.json");
+    const configPath = join(directory, "in-progress.config.json");
     writeJson(configPath, {
       projects: [
         { id: "demo", name: "One", path: "workspace" },
@@ -88,7 +88,7 @@ describe("loadConfig", () => {
   test("rejects unknown nested fields and non-directory roots", async () => {
     const directory = root();
     const projectFile = join(directory, "workspace");
-    const configPath = join(directory, "switchyard.config.json");
+    const configPath = join(directory, "in-progress.config.json");
     writeFileSync(projectFile, "not a directory");
     writeJson(configPath, {
       server: { host: "127.0.0.1", typo: true },

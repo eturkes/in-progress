@@ -24,12 +24,12 @@ describe("SecurityGate", () => {
       cookie,
       origin: ORIGIN,
       "sec-fetch-site": "same-origin",
-      "x-switchyard-csrf": session.csrfToken,
+      "x-in-progress-csrf": session.csrfToken,
     });
 
     expect(gate.assertBrowserMutation(valid).sessionId).toBe(session.sessionId);
     expect(() =>
-      gate.assertBrowserMutation(request({ cookie, "x-switchyard-csrf": session.csrfToken })),
+      gate.assertBrowserMutation(request({ cookie, "x-in-progress-csrf": session.csrfToken })),
     ).toThrow("Origin rejected");
     expect(() =>
       gate.assertBrowserMutation(
@@ -37,7 +37,7 @@ describe("SecurityGate", () => {
           cookie,
           origin: ORIGIN,
           "sec-fetch-site": "cross-site",
-          "x-switchyard-csrf": session.csrfToken,
+          "x-in-progress-csrf": session.csrfToken,
         }),
       ),
     ).toThrow("Cross-site request rejected");
@@ -57,21 +57,21 @@ describe("SecurityGate", () => {
   test("marks proxy HTTPS cookies Secure and binds sessions to an allowed Tailscale identity", () => {
     const gate = new SecurityGate([], ["alice@example.com", "bob@example.com"]);
     const initial = request({
-      host: "switchyard.example.ts.net",
+      host: "in-progress.example.ts.net",
       "tailscale-user-login": "alice@example.com",
       "x-forwarded-proto": "https",
     });
     const session = gate.session(initial);
-    expect(requestOrigin(initial)).toBe("https://switchyard.example.ts.net");
+    expect(requestOrigin(initial)).toBe("https://in-progress.example.ts.net");
     expect(session.setCookie).toContain("; Secure");
     const cookie = cookieFrom(session.setCookie!);
     const mutationHeaders = {
       cookie,
-      host: "switchyard.example.ts.net",
-      origin: "https://switchyard.example.ts.net",
+      host: "in-progress.example.ts.net",
+      origin: "https://in-progress.example.ts.net",
       "sec-fetch-site": "same-origin",
       "x-forwarded-proto": "https",
-      "x-switchyard-csrf": session.csrfToken,
+      "x-in-progress-csrf": session.csrfToken,
     };
 
     expect(
@@ -90,14 +90,14 @@ describe("SecurityGate", () => {
     expect(() =>
       gate.session(
         request({
-          host: "switchyard.example.ts.net",
+          host: "in-progress.example.ts.net",
           "tailscale-user-login": "mallory@example.com",
           "x-forwarded-proto": "https",
         }),
       ),
     ).toThrow("Tailscale identity is not allowed");
     expect(() =>
-      gate.session(request({ host: "switchyard.example.ts.net", "x-forwarded-proto": "https" })),
+      gate.session(request({ host: "in-progress.example.ts.net", "x-forwarded-proto": "https" })),
     ).toThrow("Authenticated proxy identity required");
   });
 
@@ -120,7 +120,7 @@ describe("SecurityGate", () => {
 describe("secureHeaders", () => {
   test("keeps host documents unframeable and plugin documents opaque-origin sandboxed", () => {
     const host = secureHeaders(new Response("host"), "host");
-    const pluginBase = "https://switchyard.example.ts.net/plugins/project-map/";
+    const pluginBase = "https://in-progress.example.ts.net/plugins/project-map/";
     const plugin = secureHeaders(new Response("plugin"), "plugin", pluginBase);
     const pluginAsset = secureHeaders(new Response("asset"), "plugin-asset", pluginBase);
     const hostCsp = host.headers.get("content-security-policy")!;

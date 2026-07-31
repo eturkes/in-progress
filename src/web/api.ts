@@ -43,7 +43,7 @@ export class ApiClient {
   }
 
   async #mutation<T>(url: string, method: "POST" | "DELETE", body?: unknown): Promise<T> {
-    const headers = new Headers({ "x-switchyard-csrf": this.csrfToken });
+    const headers = new Headers({ "x-in-progress-csrf": this.csrfToken });
     if (body !== undefined) headers.set("content-type", "application/json");
     const response = await fetch(url, {
       method,

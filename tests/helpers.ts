@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import type { ProjectConfig } from "../src/server/config";
 
 export function tempDirectory(label: string): string {
-  return mkdtempSync(join(tmpdir(), `switchyard-${label}-`));
+  return mkdtempSync(join(tmpdir(), `in-progress-${label}-`));
 }
 
 export function removeDirectory(path: string): void {

@@ -122,7 +122,7 @@ describe("TerminalManager", () => {
         Buffer.from(
           wireFrame(
             TerminalWire.input,
-            new TextEncoder().encode("printf '__switchyard_tail__\\n'; exit 7\n"),
+            new TextEncoder().encode("printf '__in-progress_tail__\\n'; exit 7\n"),
           ),
         ),
       );
@@ -135,7 +135,7 @@ describe("TerminalManager", () => {
       const tailIndex = frames.findIndex(
         (frame) =>
           frame[0] === TerminalWire.output &&
-          new TextDecoder().decode(frame.subarray(1)).includes("__switchyard_tail__"),
+          new TextDecoder().decode(frame.subarray(1)).includes("__in-progress_tail__"),
       );
       const exitedStatusIndex = frames.findIndex((frame) => {
         if (frame[0] !== TerminalWire.status) return false;

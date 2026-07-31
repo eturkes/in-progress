@@ -1,6 +1,6 @@
 # Alignment
 
-## Switchyard
+## in-progress
 
 - Runtime = pinned Bun / TypeScript; dependency manager = pnpm. UI = React + Vite PWA. Server = native `Bun.serve` + Bun PTY. State = `bun:sqlite`.
 - Trust boundary: host chrome + server trusted; external plugin views always opaque-origin sandboxed iframes using the versioned MessageChannel SDK. Preserve capability checks + project scoping at the host RPC boundary. Installation trusts plugins with granted data because sandboxed frames can disclose it through self-navigation.

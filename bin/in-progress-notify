@@ -14,12 +14,12 @@ for (let index = 0; index < args.length; index += 1) {
   else body.push(arg);
 }
 
-const endpoint = process.env.SWITCHYARD_NOTIFY_URL;
-const token = process.env.SWITCHYARD_NOTIFY_TOKEN;
-const projectId = process.env.SWITCHYARD_PROJECT_ID;
+const endpoint = process.env.IN_PROGRESS_NOTIFY_URL;
+const token = process.env.IN_PROGRESS_NOTIFY_TOKEN;
+const projectId = process.env.IN_PROGRESS_PROJECT_ID;
 
 if (!endpoint || !token || !projectId) {
-  console.error("switchyard-notify: run inside a Switchyard terminal");
+  console.error("in-progress-notify: run inside an in-progress terminal");
   process.exit(2);
 }
 
@@ -39,6 +39,6 @@ const response = await fetch(endpoint, {
 });
 
 if (!response.ok) {
-  console.error(`switchyard-notify: server returned ${response.status}`);
+  console.error(`in-progress-notify: server returned ${response.status}`);
   process.exit(1);
 }

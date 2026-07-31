@@ -8,7 +8,7 @@ import {
   PushSubscriptionSchema,
   type BootstrapDto,
 } from "../shared/contracts";
-import type { SwitchyardConfig } from "./config";
+import type { InProgressConfig } from "./config";
 import { NotificationService } from "./notifications";
 import { PluginRegistry } from "./plugins";
 import { ProjectRegistry } from "./projects";
@@ -58,7 +58,7 @@ function within(root: string, candidate: string): boolean {
   return path === "" || (!path.startsWith(`..${sep}`) && path !== ".." && !path.startsWith(sep));
 }
 
-export function createControlPlane(config: SwitchyardConfig, options: AppOptions = {}) {
+export function createControlPlane(config: InProgressConfig, options: AppOptions = {}) {
   const store = new StateStore(config.dataDir, options.memoryStore);
   const notifications = new NotificationService(store, config.notifications.vapidSubject);
   const projects = new ProjectRegistry(config.projects);
@@ -69,7 +69,7 @@ export function createControlPlane(config: SwitchyardConfig, options: AppOptions
   );
   const terminals = new TerminalManager(config, projects, notifications);
   const webRoot = resolve(config.rootDir, "dist/web");
-  const webProxy = process.env.SWITCHYARD_WEB_PROXY;
+  const webProxy = process.env.IN_PROGRESS_WEB_PROXY;
   let hookTimes: number[] = [];
 
   async function route(
@@ -92,7 +92,7 @@ export function createControlPlane(config: SwitchyardConfig, options: AppOptions
           .get("sec-websocket-protocol")
           ?.split(",")
           .map((value) => value.trim());
-        if (!offered?.includes("switchyard.terminal.v1")) {
+        if (!offered?.includes("in-progress.terminal.v1")) {
           throw new HttpError(426, "Terminal WebSocket subprotocol required");
         }
         const ticketValue = url.searchParams.get("ticket") ?? "";
@@ -105,7 +105,7 @@ export function createControlPlane(config: SwitchyardConfig, options: AppOptions
             terminalSessionId: ticket.terminalSessionId,
             connectionId: crypto.randomUUID(),
           },
-          headers: { "Sec-WebSocket-Protocol": "switchyard.terminal.v1" },
+          headers: { "Sec-WebSocket-Protocol": "in-progress.terminal.v1" },
         });
         if (upgraded) {
           terminals.consumeTicket(ticketValue);
@@ -149,7 +149,7 @@ export function createControlPlane(config: SwitchyardConfig, options: AppOptions
             const remove = notifications.onEvent((event, announce) => {
               controller.enqueue(
                 encoder.encode(
-                  `event: ${announce ? "switchyard" : "switchyard-update"}\ndata: ${JSON.stringify(event)}\n\n`,
+                  `event: ${announce ? "in-progress" : "in-progress-update"}\ndata: ${JSON.stringify(event)}\n\n`,
                 ),
               );
             });
@@ -250,7 +250,7 @@ export function createControlPlane(config: SwitchyardConfig, options: AppOptions
         security.assertBrowserMutation(request);
         const event = notifications.create({
           kind: "system",
-          title: "Switchyard is connected",
+          title: "in-progress is connected",
           body: "Phone notifications are ready.",
           url: "/",
         });

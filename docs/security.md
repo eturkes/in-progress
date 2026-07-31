@@ -2,7 +2,7 @@
 
 ## Security claim
 
-Switchyard safely exposes a full shell only under this deployment model:
+in-progress safely exposes a full shell only under this deployment model:
 
 1. the Bun process runs unprivileged as the single trusted workstation user;
 2. HTTP listens on loopback only;
@@ -11,13 +11,13 @@ Switchyard safely exposes a full shell only under this deployment model:
 5. external plugin code remains in the enforced opaque-origin sandbox;
 6. dependencies and plugin directories are selected by the owner.
 
-Anyone who can send terminal input has the workstation user’s effective shell authority, including access to that user’s repositories, credentials, agents, network, and tools. Switchyard is not a multi-user tenancy boundary or a sandbox for commands launched in its terminal.
+Anyone who can send terminal input has the workstation user’s effective shell authority, including access to that user’s repositories, credentials, agents, network, and tools. in-progress is not a multi-user tenancy boundary or a sandbox for commands launched in its terminal.
 
 ## Trust boundaries
 
 ### Trusted
 
-- Switchyard server + built React host bundle
+- in-progress server + built React host bundle
 - configured shell and commands the user intentionally runs
 - local operating-system user and same-UID processes
 - explicitly configured project roots
@@ -33,16 +33,16 @@ Anyone who can send terminal input has the workstation user’s effective shell 
 
 ### Outside the boundary
 
-- root or another process able to inspect/modify the Switchyard user’s memory/files
+- root or another process able to inspect/modify the in-progress user’s memory/files
 - a compromised host browser, host bundle, Bun runtime, Tailscale client, or OS
 - isolation between programs intentionally started in a terminal
-- persistence of PTYs across a Switchyard/host restart
+- persistence of PTYs across an in-progress/host restart
 
 Loopback blocks remote network peers, not other accounts/processes on the same machine. This personal-workstation design treats local code as trusted; use an isolated OS account or VM if that assumption is false.
 
 ## Remote access
 
-`server.host` defaults to `127.0.0.1`. Startup rejects every non-loopback value unless `SWITCHYARD_UNSAFE_BIND=1` is explicitly set. The supported remote path is:
+`server.host` defaults to `127.0.0.1`. Startup rejects every non-loopback value unless `IN_PROGRESS_UNSAFE_BIND=1` is explicitly set. The supported remote path is:
 
 ```text
 tailnet browser → HTTPS Tailscale Serve → http://127.0.0.1:4317
@@ -61,7 +61,7 @@ Hardening requirements:
 
 `allowedTailscaleUsers` checks a present `Tailscale-User-Login` header. A request carrying forwarded-proxy headers requires forwarded HTTPS plus that identity; a direct request requires a loopback URL host. This rejects forged `Host` DNS-rebinding requests and tagged source devices for which Serve omits user identity. A genuinely direct loopback request without proxy headers is labeled `local`. Tailnet policy **must** still keep tagged/shared/unowned devices away from the Serve endpoint; the application allowlist is defense in depth, not a replacement for network policy.
 
-`SWITCHYARD_UNSAFE_BIND=1` materially changes the threat model: LAN/public peers may reach a remote shell, spoof Tailscale identity headers, and use plaintext HTTP. It is an escape hatch, not an endorsed mode.
+`IN_PROGRESS_UNSAFE_BIND=1` materially changes the threat model: LAN/public peers may reach a remote shell, spoof Tailscale identity headers, and use plaintext HTTP. It is an escape hatch, not an endorsed mode.
 
 ## Browser sessions, CSRF, and WebSockets
 
@@ -76,16 +76,16 @@ Hardening requirements:
 Every browser mutation requires:
 
 - live cookie session;
-- constant-time matching `X-Switchyard-CSRF` token;
+- constant-time matching `X-In-Progress-CSRF` token;
 - exact request `Origin` equal to the computed public origin or an explicit `allowedOrigins` entry;
 - `Sec-Fetch-Site` absent or `same-origin`;
 - request identity equal to session identity.
 
 API responses omit CORS grants. Bootstrap rejects cross-site Fetch Metadata/origins before creating a session. It may create a new session; other authenticated routes refresh only the server-side idle timestamp. The cookie is not extended, so an active browser bootstraps a replacement after at most seven days.
 
-WebSockets need separate treatment because browsers can send cookies during a cross-origin upgrade and normal CORS does not protect the handshake. Switchyard requires exact origin, the `switchyard.terminal.v1` subprotocol, the browser session cookie, unchanged identity, and a one-use 30-second ticket minted through a CSRF-protected POST. [RFC 6455 origin guidance](https://datatracker.ietf.org/doc/html/rfc6455#section-10.2), [xterm.js WebSocket warning](https://xtermjs.org/docs/guides/security/#3-websockets)
+WebSockets need separate treatment because browsers can send cookies during a cross-origin upgrade and normal CORS does not protect the handshake. in-progress requires exact origin, the `in-progress.terminal.v1` subprotocol, the browser session cookie, unchanged identity, and a one-use 30-second ticket minted through a CSRF-protected POST. [RFC 6455 origin guidance](https://datatracker.ietf.org/doc/html/rfc6455#section-10.2), [xterm.js WebSocket warning](https://xtermjs.org/docs/guides/security/#3-websockets)
 
-Tickets travel in the WebSocket URL query. They are random, single-use, short-lived, and consumed immediately after a successful authenticated upgrade. Reverse proxies and access logs must omit/redact query strings. Switchyard itself does not log terminal URLs, input, output, cookies, CSRF values, or hook tokens.
+Tickets travel in the WebSocket URL query. They are random, single-use, short-lived, and consumed immediately after a successful authenticated upgrade. Reverse proxies and access logs must omit/redact query strings. in-progress itself does not log terminal URLs, input, output, cookies, CSRF values, or hook tokens.
 
 Terminal WebSocket limits:
 
@@ -155,16 +155,16 @@ These controls protect the host broker from confused-deputy/path traversal attac
 
 ## Notification secrets and privacy
 
-`.data/` is mode `0700`; `.data/switchyard.db` is mode `0600`. It contains:
+`.data/` is mode `0700`; `.data/in-progress.db` is mode `0600`. It contains:
 
 - VAPID private/public keys;
 - one global notification-hook bearer token;
 - browser push subscription endpoints and encryption material;
 - event titles, bodies, deep links, and read state.
 
-Every Switchyard shell receives the same notify-only hook token plus its default `SWITCHYARD_PROJECT_ID`. A process possessing the token can submit a bounded event for any existing configured project by overriding that ID; it cannot use browser mutation or terminal APIs. Treat the token as a global notification capability and rotate it by removing its database metadata only while Switchyard is stopped.
+Every in-progress shell receives the same notify-only hook token plus its default `IN_PROGRESS_PROJECT_ID`. A process possessing the token can submit a bounded event for any existing configured project by overriding that ID; it cannot use browser mutation or terminal APIs. Treat the token as a global notification capability and rotate it by removing its database metadata only while in-progress is stopped.
 
-Web Push encrypts payload contents for the browser under [RFC 8291](https://datatracker.ietf.org/doc/html/rfc8291) and authenticates the application server with VAPID under [RFC 8292](https://datatracker.ietf.org/doc/html/rfc8292). Push providers still observe endpoint, timing, approximate size, source IP, and delivery metadata. Switchyard sends title/body in the payload, so notification text must never contain secrets, source snippets, commands, credentials, or raw terminal output.
+Web Push encrypts payload contents for the browser under [RFC 8291](https://datatracker.ietf.org/doc/html/rfc8291) and authenticates the application server with VAPID under [RFC 8292](https://datatracker.ietf.org/doc/html/rfc8292). Push providers still observe endpoint, timing, approximate size, source IP, and delivery metadata. in-progress sends title/body in the payload, so notification text must never contain secrets, source snippets, commands, credentials, or raw terminal output.
 
 Notification availability is bounded: each PTY accepts ten OSC notification events per minute and the shared hook accepts 60 per minute; SQLite keeps the newest 2,000 events; the asynchronous Web Push queue keeps 100 waiting events and discards the oldest waiting delivery under sustained pressure; subscription fan-out is capped at eight concurrent ten-second requests. Inbox persistence and SSE delivery remain synchronous even when a queued push is discarded. Urgent action/failure pushes receive longer provider TTLs than completion/system updates.
 
@@ -185,7 +185,7 @@ Browser permission must follow an explicit user gesture. On iOS/iPadOS, Web Push
 | Output/session DoS               | frame/backpressure/idle/ring/session limits                      | intentionally run process can consume host CPU/RAM    |
 | Lost phone                       | Tailscale device revocation + OS lock                            | existing browser session until device/network revoked |
 | Push-provider compromise         | standards encryption + minimal payload policy                    | metadata exposure; unsafe user-authored text          |
-| Local same-user compromise       | outside boundary                                                 | complete Switchyard/repository access                 |
+| Local same-user compromise       | outside boundary                                                 | complete in-progress/repository access                |
 
 ## Deployment checklist
 

@@ -51,9 +51,9 @@ export function useEventFeed({ api, onForegroundEvent }: UseEventFeedOptions) {
 
     const consumeNotificationDeepLink = async () => {
       const target = new URL(window.location.href);
-      const eventId = target.searchParams.get("switchyardEvent");
+      const eventId = target.searchParams.get("in-progress-event");
       if (!eventId) return;
-      target.searchParams.delete("switchyardEvent");
+      target.searchParams.delete("in-progress-event");
       try {
         merge([await api.markEventRead(eventId)]);
       } catch {
@@ -75,7 +75,7 @@ export function useEventFeed({ api, onForegroundEvent }: UseEventFeedOptions) {
       setConnected(false);
       void sync();
     });
-    stream.addEventListener("switchyard", ({ data }: MessageEvent<string>) => {
+    stream.addEventListener("in-progress", ({ data }: MessageEvent<string>) => {
       try {
         const event = JSON.parse(data) as EventDto;
         merge([event]);
@@ -84,7 +84,7 @@ export function useEventFeed({ api, onForegroundEvent }: UseEventFeedOptions) {
         // Ignore malformed external event data; the persisted feed remains authoritative.
       }
     });
-    stream.addEventListener("switchyard-update", ({ data }: MessageEvent<string>) => {
+    stream.addEventListener("in-progress-update", ({ data }: MessageEvent<string>) => {
       try {
         merge([JSON.parse(data) as EventDto]);
       } catch {
@@ -177,7 +177,7 @@ function devicePushAvailable(hostAvailable: boolean): boolean {
 function serviceWorkerRegistration(timeoutMs = 8_000): Promise<ServiceWorkerRegistration> {
   return new Promise((resolve, reject) => {
     const timeout = window.setTimeout(
-      () => reject(new Error("The Switchyard service worker did not become ready")),
+      () => reject(new Error("The in-progress service worker did not become ready")),
       timeoutMs,
     );
     void navigator.serviceWorker.ready.then(
@@ -555,7 +555,7 @@ export function NotificationCenter({
                 <p>
                   {subscription
                     ? "This browser receives completion, failure, and input-needed events."
-                    : "Receive agent events when Switchyard is closed or in the background."}
+                    : "Receive agent events when in-progress is closed or in the background."}
                 </p>
               </div>
               <button

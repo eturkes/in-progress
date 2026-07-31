@@ -1,5 +1,5 @@
 {
-  "name": "switchyard",
+  "name": "in-progress",
   "version": "0.1.0",
   "private": true,
   "description": "Local-first browser control plane for coding agents",
@@ -11,7 +11,7 @@
     "build:web": "vite build",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "dev": "concurrently -k -n server,web -c green,cyan 'pnpm dev:server' 'pnpm dev:web'",
-    "dev:server": "SWITCHYARD_WEB_PROXY=http://127.0.0.1:5173 bun --watch src/server/index.ts",
+    "dev:server": "IN_PROGRESS_WEB_PROXY=http://127.0.0.1:5173 bun --watch src/server/index.ts",
     "dev:web": "vite --host 127.0.0.1",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",

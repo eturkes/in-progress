@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 
-const SESSION_COOKIE = "switchyard_session";
+const SESSION_COOKIE = "in-progress-session";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
 const MAX_SESSIONS = 256;
 
@@ -120,7 +120,7 @@ export class SecurityGate {
     if (fetchSite && fetchSite !== "same-origin")
       throw new HttpError(403, "Cross-site request rejected");
     const live = this.#liveSession(request);
-    const supplied = request.headers.get("x-switchyard-csrf") ?? "";
+    const supplied = request.headers.get("x-in-progress-csrf") ?? "";
     if (!live || !constantEqual(live.session.csrfToken, supplied)) {
       throw new HttpError(403, "CSRF token rejected");
     }

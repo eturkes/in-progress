@@ -345,13 +345,13 @@
       function receiveHost(event) {
         if (
           event.source !== window.parent ||
-          event.data?.type !== "switchyard:init" ||
+          event.data?.type !== "in-progress:init" ||
           !event.ports[0]
         )
           return;
         if (event.data.context?.apiVersion !== "1.0") {
           event.ports[0].close();
-          app.innerHTML = `<div class="error" role="alert"><strong>Project map is incompatible</strong><p>Expected Switchyard plugin API 1.0.</p></div>`;
+          app.innerHTML = `<div class="error" role="alert"><strong>Project map is incompatible</strong><p>Expected in-progress plugin API 1.0.</p></div>`;
           return;
         }
         window.removeEventListener("message", receiveHost);

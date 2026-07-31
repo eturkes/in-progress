@@ -8,10 +8,10 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       injectRegister: "script-defer",
-      includeAssets: ["switchyard.svg", "apple-touch-icon.png"],
+      includeAssets: ["in-progress.svg", "apple-touch-icon.png"],
       manifest: {
-        name: "Switchyard",
-        short_name: "Switchyard",
+        name: "in-progress",
+        short_name: "in-progress",
         description: "A local-first control plane for coding agents.",
         theme_color: "#0b0e14",
         background_color: "#0b0e14",
@@ -27,7 +27,7 @@ export default defineConfig({
             purpose: "any",
           },
           {
-            src: "/switchyard.svg",
+            src: "/in-progress.svg",
             sizes: "any",
             type: "image/svg+xml",
             purpose: "any maskable",

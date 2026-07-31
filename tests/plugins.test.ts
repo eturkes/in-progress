@@ -31,7 +31,7 @@ function manifest(id: string, overrides: Record<string, unknown> = {}): Record<s
 function createPlugin(parent: string, id: string, overrides: Record<string, unknown> = {}): string {
   const directory = join(parent, id);
   mkdirSync(directory, { recursive: true });
-  writeJson(join(directory, "switchyard.plugin.json"), manifest(id, overrides));
+  writeJson(join(directory, "in-progress.plugin.json"), manifest(id, overrides));
   writeFileSync(join(directory, "index.html"), "<!doctype html><title>Plugin</title>\n");
   writeFileSync(join(directory, "plugin.js"), "export {};\n");
   return directory;
@@ -77,7 +77,7 @@ describe("plugin manifest and registry", () => {
     ]);
     expect(registry.asset("project-map", "")).toEndWith("/project-map/index.html");
     expect(registry.asset("project-map", "plugin.js")).toEndWith("/project-map/plugin.js");
-    expect(() => registry.asset("project-map", "switchyard.plugin.json")).toThrow(
+    expect(() => registry.asset("project-map", "in-progress.plugin.json")).toThrow(
       "Plugin asset not found",
     );
     expect(() => registry.assertCapability("project-map", "project.metadata")).not.toThrow();
@@ -127,7 +127,7 @@ describe("validatePlugin", () => {
     const directory = createPlugin(plugins, "project-map");
 
     const byDirectory = await validatePlugin(directory);
-    const byManifest = await validatePlugin(join(directory, "switchyard.plugin.json"));
+    const byManifest = await validatePlugin(join(directory, "in-progress.plugin.json"));
 
     expect(byDirectory.manifest.id).toBe("project-map");
     expect(byDirectory.entry).toEndWith("/index.html");
@@ -139,7 +139,7 @@ describe("validatePlugin", () => {
     const plugins = root("validator-invalid");
     const invalidJson = join(plugins, "json");
     mkdirSync(invalidJson, { recursive: true });
-    writeFileSync(join(invalidJson, "switchyard.plugin.json"), "{");
+    writeFileSync(join(invalidJson, "in-progress.plugin.json"), "{");
     await expect(validatePlugin(invalidJson)).rejects.toThrow("not valid JSON");
 
     const duplicate = createPlugin(plugins, "duplicate-caps", {

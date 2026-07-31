@@ -8,7 +8,7 @@
 | HTTP/realtime   | Native `Bun.serve` + native binary WebSockets/SSE                                                     |
 | Terminal        | `Bun.Terminal` PTY per session; xterm.js in the trusted host UI                                       |
 | UI              | React/Vite installable PWA; responsive project rail + plugin rail + view pane                         |
-| Persistence     | `bun:sqlite` in `.data/switchyard.db`; PTY processes remain in memory                                 |
+| Persistence     | `bun:sqlite` in `.data/in-progress.db`; PTY processes remain in memory                                |
 | Remote boundary | Loopback HTTP behind private Tailscale Serve HTTPS                                                    |
 | Plugins         | Local static directories; same URL origin, forced opaque iframe origin, `MessageChannel` capabilities |
 | Notifications   | SQLite inbox + SSE foreground delivery + VAPID Web Push background delivery                           |
@@ -25,7 +25,7 @@ phone / desktop browser
  Tailscale Serve
         │ loopback HTTP; identity headers
         ▼
-┌────────────────────────── Switchyard / Bun ──────────────────────────┐
+┌────────────────────────── in-progress / Bun ──────────────────────────┐
 │ Bun.serve                                                            │
 │ ├─ dist/web React PWA          ├─ binary terminal WebSockets         │
 │ ├─ JSON API + event SSE        └─ sandboxed plugin static assets     │
@@ -38,20 +38,20 @@ phone / desktop browser
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-Development substitutes Vite at `SWITCHYARD_WEB_PROXY=http://127.0.0.1:5173`; authorization, cookie, Tailscale identity, and forwarding headers are stripped before that proxy request. Production serves `dist/web` and SPA-falls back to its `index.html`. API, host, and plugin responses receive distinct cache/CSP/security headers.
+Development substitutes Vite at `IN_PROGRESS_WEB_PROXY=http://127.0.0.1:5173`; authorization, cookie, Tailscale identity, and forwarding headers are stripped before that proxy request. Production serves `dist/web` and SPA-falls back to its `index.html`. API, host, and plugin responses receive distinct cache/CSP/security headers.
 
 ## Configuration and startup
 
-`loadConfig()` parses `switchyard.config.json`, or `SWITCHYARD_CONFIG`, before opening sockets:
+`loadConfig()` parses `in-progress.config.json`, or `IN_PROGRESS_CONFIG`, before opening sockets:
 
 1. resolve the config and its containing root;
 2. apply defaults and reject unknown fields;
-3. refuse a non-loopback server host unless `SWITCHYARD_UNSAFE_BIND=1`;
+3. refuse a non-loopback server host unless `IN_PROGRESS_UNSAFE_BIND=1`;
 4. expand `~/`, resolve project/plugin paths relative to the config, require existence, then canonicalize with `realpath`;
 5. reject duplicate project/plugin IDs;
 6. place runtime state in `<config-root>/.data`.
 
-The machine-readable contract is [switchyard-config.schema.json](switchyard-config.schema.json).
+The machine-readable contract is [in-progress-config.schema.json](in-progress-config.schema.json).
 
 ## Project and terminal lifecycle
 
@@ -67,7 +67,7 @@ Project configuration is static for a server run. Each project record supplies t
 - injected project-scoped notification environment;
 - in-memory client map and one writer lease.
 
-Changing project/view or losing the browser connection does **not** kill the PTY. Reattach receives the byte-ring snapshot, then live output. Sessions survive browser reload/network loss only while the Switchyard process remains alive; a daemon restart or host reboot ends them. Session metadata and scrollback are intentionally not stored in SQLite.
+Changing project/view or losing the browser connection does **not** kill the PTY. Reattach receives the byte-ring snapshot, then live output. Sessions survive browser reload/network loss only while the in-progress process remains alive; a daemon restart or host reboot ends them. Session metadata and scrollback are intentionally not stored in SQLite.
 
 Multiple clients may observe one session. The newest attachment owns input/resize; another client sends `claim` to take the writer lease. All clients receive output/status. Explicit delete sends `SIGTERM` and closes the PTY. Process exit creates a `completed`/`failed` event.
 
@@ -76,7 +76,7 @@ Multiple clients may observe one session. The newest attachment owns input/resiz
 Attach is two-stage:
 
 1. same-origin, CSRF-protected `POST /api/projects/:project/sessions/:session/ticket` returns a random one-use ticket expiring in 30 seconds;
-2. browser opens `/api/terminal?ticket=…` with subprotocol `switchyard.terminal.v1`.
+2. browser opens `/api/terminal?ticket=…` with subprotocol `in-progress.terminal.v1`.
 
 The server validates the ticket, browser session, WebSocket origin, and identity before upgrade; it consumes the ticket only after a successful upgrade, then attaches immutable project/PTY socket metadata. A rejected/failed handshake does not burn the ticket; it remains usable until success or 30-second expiry. Text frames are rejected. Compression is disabled; incoming client messages are capped at 64 KiB; the Bun send backpressure cap is 512 KiB with close-on-limit; idle timeout is 60 seconds.
 
@@ -99,7 +99,7 @@ Replay and live output are emitted in at most 32 KiB frames. Replay starts with 
 
 `GET /api/bootstrap` establishes an in-memory browser session and returns the CSRF token, identity, projects, plugins, and push status. Server entries expire after seven idle days; the `HttpOnly`, `SameSite=Strict` cookie expires at most seven days after mint and is `Secure` when the externally observed origin is HTTPS. Any server restart invalidates sessions; a still-open browser bootstraps a replacement.
 
-Bootstrap establishes or refreshes the session; other read endpoints require and refresh an existing session. Every browser mutation requires the cookie, `X-Switchyard-CSRF`, exact expected/allowlisted `Origin`, same Tailscale identity, and—when supplied—`Sec-Fetch-Site: same-origin`.
+Bootstrap establishes or refreshes the session; other read endpoints require and refresh an existing session. Every browser mutation requires the cookie, `X-In-Progress-CSRF`, exact expected/allowlisted `Origin`, same Tailscale identity, and—when supplied—`Sec-Fetch-Site: same-origin`.
 
 Core routes:
 
@@ -135,7 +135,7 @@ The PWA service worker displays a notification and focuses/opens the root-relati
 
 ## SQLite ownership
 
-`.data/` is created mode `0700`; `switchyard.db` is mode `0600`, strict SQLite with WAL, foreign keys, and a five-second busy timeout.
+`.data/` is created mode `0700`; `in-progress.db` is mode `0600`, strict SQLite with WAL, foreign keys, and a five-second busy timeout.
 
 Persistent data:
 

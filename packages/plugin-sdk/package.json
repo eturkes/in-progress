@@ -1,7 +1,7 @@
 {
-  "name": "@switchyard/plugin-sdk",
+  "name": "@in-progress/plugin-sdk",
   "version": "1.0.0",
-  "description": "Typed MessageChannel client for Switchyard view plugins",
+  "description": "Typed MessageChannel client for in-progress view plugins",
   "files": [
     "dist"
   ],

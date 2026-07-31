@@ -2,7 +2,7 @@ import { lstat, readFile, readdir, realpath, stat } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { PluginManifestSchema, type PluginManifest } from "../src/shared/contracts";
 
-const MANIFEST_NAME = "switchyard.plugin.json";
+const MANIFEST_NAME = "in-progress.plugin.json";
 const MAX_ASSETS = 20_000;
 
 export interface ValidatedPlugin {

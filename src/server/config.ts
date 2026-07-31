@@ -49,10 +49,10 @@ const RawConfigSchema = z
         vapidSubject: z
           .string()
           .regex(/^(mailto:|https:\/\/)/)
-          .default("mailto:switchyard@localhost"),
+          .default("mailto:in-progress@localhost"),
       })
       .strict()
-      .default({ vapidSubject: "mailto:switchyard@localhost" }),
+      .default({ vapidSubject: "mailto:in-progress@localhost" }),
   })
   .strict();
 
@@ -64,7 +64,7 @@ export interface ProjectConfig {
   color: string;
 }
 
-export interface SwitchyardConfig {
+export interface InProgressConfig {
   rootDir: string;
   configPath: string;
   dataDir: string;
@@ -105,19 +105,19 @@ function isLoopback(host: string): boolean {
 }
 
 export async function loadConfig(
-  configPath = process.env.SWITCHYARD_CONFIG,
-): Promise<SwitchyardConfig> {
+  configPath = process.env.IN_PROGRESS_CONFIG,
+): Promise<InProgressConfig> {
   const candidate = configPath
     ? expandHome(configPath)
-    : resolve(process.cwd(), "switchyard.config.json");
+    : resolve(process.cwd(), "in-progress.config.json");
   const absoluteConfig = isAbsolute(candidate) ? candidate : resolve(process.cwd(), candidate);
   if (!existsSync(absoluteConfig)) throw new Error(`Config not found: ${absoluteConfig}`);
   const rootDir = dirname(realpathSync(absoluteConfig));
   const parsed = RawConfigSchema.parse(await Bun.file(absoluteConfig).json());
 
-  if (!isLoopback(parsed.server.host) && process.env.SWITCHYARD_UNSAFE_BIND !== "1") {
+  if (!isLoopback(parsed.server.host) && process.env.IN_PROGRESS_UNSAFE_BIND !== "1") {
     throw new Error(
-      `Refusing non-loopback bind (${parsed.server.host}). Use a private HTTPS proxy, or set SWITCHYARD_UNSAFE_BIND=1 after reviewing the threat model.`,
+      `Refusing non-loopback bind (${parsed.server.host}). Use a private HTTPS proxy, or set IN_PROGRESS_UNSAFE_BIND=1 after reviewing the threat model.`,
     );
   }
 
@@ -154,10 +154,10 @@ export async function loadConfig(
 
 export function configForTests(
   rootDir: string,
-  overrides: Partial<SwitchyardConfig> = {},
-): SwitchyardConfig {
-  const base: SwitchyardConfig = {
-    configPath: join(rootDir, "switchyard.config.json"),
+  overrides: Partial<InProgressConfig> = {},
+): InProgressConfig {
+  const base: InProgressConfig = {
+    configPath: join(rootDir, "in-progress.config.json"),
     rootDir,
     dataDir: join(rootDir, ".data"),
     server: {

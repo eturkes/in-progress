@@ -39,7 +39,7 @@ function errorMessage(error: unknown): string {
 
 function storedSession(projectId: string): string | null {
   try {
-    return window.localStorage.getItem(`switchyard:last-session:${projectId}`);
+    return window.localStorage.getItem(`in-progress:last-session:${projectId}`);
   } catch {
     return null;
   }
@@ -54,7 +54,7 @@ function rememberSession(projectId: string, sessionId: string): void {
   url.searchParams.set("session", sessionId);
   window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
   try {
-    window.localStorage.setItem(`switchyard:last-session:${projectId}`, sessionId);
+    window.localStorage.setItem(`in-progress:last-session:${projectId}`, sessionId);
   } catch {
     // The URL remains the session source when persistent storage is unavailable.
   }
@@ -62,7 +62,7 @@ function rememberSession(projectId: string, sessionId: string): void {
 
 function storedScreenReaderMode(projectId: string): boolean {
   try {
-    return window.localStorage.getItem(`switchyard:screen-reader:${projectId}`) === "true";
+    return window.localStorage.getItem(`in-progress:screen-reader:${projectId}`) === "true";
   } catch {
     return false;
   }
@@ -70,7 +70,7 @@ function storedScreenReaderMode(projectId: string): boolean {
 
 function rememberScreenReaderMode(projectId: string, enabled: boolean): void {
   try {
-    window.localStorage.setItem(`switchyard:screen-reader:${projectId}`, String(enabled));
+    window.localStorage.setItem(`in-progress:screen-reader:${projectId}`, String(enabled));
   } catch {
     // The preference remains active until this view is remounted.
   }
@@ -477,7 +477,7 @@ function TerminalConnection({
       try {
         const { ticket } = await api.terminalTicket(projectId, session.id);
         if (disposed) return;
-        const socket = new WebSocket(websocketUrl(ticket), "switchyard.terminal.v1");
+        const socket = new WebSocket(websocketUrl(ticket), "in-progress.terminal.v1");
         socket.binaryType = "arraybuffer";
         socketRef.current = socket;
         socket.addEventListener("open", () => {

@@ -37,7 +37,7 @@ function mutationHeaders(overrides: Record<string, string> = {}): Record<string,
     cookie,
     origin,
     "sec-fetch-site": "same-origin",
-    "x-switchyard-csrf": csrfToken,
+    "x-in-progress-csrf": csrfToken,
     ...overrides,
   };
 }
@@ -67,7 +67,7 @@ describe("HTTP bootstrap and terminal authorization", () => {
       method: "POST",
     });
     const wrongToken = await fetch(`${origin}/api/projects/fixture/sessions`, {
-      headers: mutationHeaders({ "x-switchyard-csrf": "wrong" }),
+      headers: mutationHeaders({ "x-in-progress-csrf": "wrong" }),
       method: "POST",
     });
 

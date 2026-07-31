@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import type { NotificationEventInput, TerminalSessionDto } from "../shared/contracts";
 import { TerminalWire, wireFrame } from "../shared/terminal-wire";
-import type { SwitchyardConfig } from "./config";
+import type { InProgressConfig } from "./config";
 import { NotificationService } from "./notifications";
 import { ProjectRegistry } from "./projects";
 import { HttpError } from "./security";
@@ -113,14 +113,14 @@ function sessionDto(session: TerminalSession): TerminalSessionDto {
 export class TerminalManager {
   readonly #sessions = new Map<string, TerminalSession>();
   readonly #tickets = new Map<string, Ticket>();
-  readonly #config: SwitchyardConfig;
+  readonly #config: InProgressConfig;
   readonly #projects: ProjectRegistry;
   readonly #notifications: NotificationService;
   #closing = false;
   #serverPort: number;
 
   constructor(
-    config: SwitchyardConfig,
+    config: InProgressConfig,
     projects: ProjectRegistry,
     notifications: NotificationService,
   ) {
@@ -176,9 +176,9 @@ export class TerminalManager {
         ...processEnv(),
         COLORTERM: "truecolor",
         TERM: "xterm-256color",
-        SWITCHYARD_NOTIFY_URL: notifyUrl,
-        SWITCHYARD_NOTIFY_TOKEN: this.#notifications.hookToken,
-        SWITCHYARD_PROJECT_ID: project.id,
+        IN_PROGRESS_NOTIFY_URL: notifyUrl,
+        IN_PROGRESS_NOTIFY_TOKEN: this.#notifications.hookToken,
+        IN_PROGRESS_PROJECT_ID: project.id,
         PATH: `${join(this.#config.rootDir, "bin")}:${globalThis.process.env.PATH ?? ""}`,
       },
       // A spawn-owned PTY makes the child its session leader with a controlling

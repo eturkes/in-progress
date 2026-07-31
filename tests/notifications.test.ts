@@ -57,7 +57,7 @@ describe("StateStore notifications", () => {
     const store = new StateStore(dataDir);
     try {
       expect(statSync(dataDir).mode & 0o777).toBe(0o700);
-      expect(statSync(join(dataDir, "switchyard.db")).mode & 0o777).toBe(0o600);
+      expect(statSync(join(dataDir, "in-progress.db")).mode & 0o777).toBe(0o600);
     } finally {
       store.close();
     }

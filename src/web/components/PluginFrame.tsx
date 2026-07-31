@@ -153,7 +153,7 @@ export function PluginFrame({ api, plugin, project, onStatus, onToast }: PluginF
 
     target.postMessage(
       {
-        type: "switchyard:init",
+        type: "in-progress:init",
         nonce,
         context: {
           apiVersion: PLUGIN_API_VERSION,

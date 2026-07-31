@@ -1,13 +1,13 @@
 {
-  "$schema": "./docs/switchyard-config.schema.json",
+  "$schema": "./docs/in-progress-config.schema.json",
   "server": {
     "host": "127.0.0.1",
     "port": 4317
   },
   "projects": [
     {
-      "id": "switchyard",
-      "name": "Switchyard",
+      "id": "in-progress",
+      "name": "in-progress",
       "path": ".",
       "color": "#67d5b5"
     }
@@ -17,6 +17,6 @@
     "scrollbackBytes": 1048576
   },
   "notifications": {
-    "vapidSubject": "mailto:switchyard@localhost"
+    "vapidSubject": "mailto:in-progress@localhost"
   }
 }

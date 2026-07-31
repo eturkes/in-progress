@@ -96,11 +96,11 @@ function storeValue(key: string, value: string): void {
 }
 
 function loadCollapsed(): boolean {
-  return storedValue("switchyard:rail-collapsed") === "true";
+  return storedValue("in-progress:rail-collapsed") === "true";
 }
 
 function friendlyError(error: unknown): string {
-  return error instanceof Error ? error.message : "Switchyard could not start";
+  return error instanceof Error ? error.message : "in-progress could not start";
 }
 
 export function App() {
@@ -146,7 +146,7 @@ export function App() {
         ) : (
           <div className="boot-loading" role="status">
             <span className="spinner" />
-            Connecting to Switchyard
+            Connecting to in-progress
           </div>
         )}
       </main>
@@ -195,7 +195,7 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
   const project =
     bootstrapData.projects.find((candidate) => candidate.id === route.projectId) ??
     bootstrapData.projects.find(
-      (candidate) => candidate.id === storedValue("switchyard:last-project"),
+      (candidate) => candidate.id === storedValue("in-progress:last-project"),
     ) ??
     bootstrapData.projects[0] ??
     null;
@@ -203,7 +203,7 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
     bootstrapData.plugins.find((candidate) => candidate.id === route.pluginId) ??
     bootstrapData.plugins.find(
       (candidate) =>
-        project && candidate.id === storedValue(`switchyard:last-plugin:${project.id}`),
+        project && candidate.id === storedValue(`in-progress:last-plugin:${project.id}`),
     ) ??
     bootstrapData.plugins.find((candidate) => candidate.id === "terminal") ??
     bootstrapData.plugins[0] ??
@@ -214,8 +214,8 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
     if (replace) window.history.replaceState({}, "", path);
     else window.history.pushState({}, "", path);
     setRoute({ projectId, pluginId });
-    storeValue("switchyard:last-project", projectId);
-    storeValue(`switchyard:last-plugin:${projectId}`, pluginId);
+    storeValue("in-progress:last-project", projectId);
+    storeValue(`in-progress:last-plugin:${projectId}`, pluginId);
   }, []);
 
   useEffect(() => {
@@ -256,7 +256,7 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
 
   const selectProject = useCallback(
     (nextProject: ProjectDto) => {
-      const remembered = storedValue(`switchyard:last-plugin:${nextProject.id}`);
+      const remembered = storedValue(`in-progress:last-plugin:${nextProject.id}`);
       const nextPlugin = bootstrapData.plugins.some((candidate) => candidate.id === remembered)
         ? remembered!
         : "terminal";
@@ -341,7 +341,7 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
 
   const toggleRail = () => {
     setRailCollapsed((current) => {
-      storeValue("switchyard:rail-collapsed", String(!current));
+      storeValue("in-progress:rail-collapsed", String(!current));
       return !current;
     });
   };
@@ -364,7 +364,7 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
 
   useEffect(() => {
     document.title =
-      project && plugin ? `${plugin.name} — ${project.name} · Switchyard` : "Switchyard";
+      project && plugin ? `${plugin.name} — ${project.name} · in-progress` : "in-progress";
   }, [plugin, project]);
 
   if (!project || !plugin) {
@@ -373,7 +373,7 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
         <div className="boot-error">
           <h1>Nothing is configured</h1>
           <p>
-            Add at least one project and plugin to switchyard.config.json, then restart the host.
+            Add at least one project and plugin to in-progress.config.json, then restart the host.
           </p>
         </div>
       </main>
@@ -410,7 +410,7 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
             <span />
           </div>
           <div className="brand-copy">
-            <strong>Switchyard</strong>
+            <strong>in-progress</strong>
             <span>agent control</span>
           </div>
           <button

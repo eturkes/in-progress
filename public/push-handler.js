@@ -1,6 +1,6 @@
 self.addEventListener("push", (event) => {
   let payload = {
-    title: "Switchyard",
+    title: "in-progress",
     body: "A project needs your attention.",
     kind: "system",
     url: "/",
@@ -13,9 +13,9 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
-      badge: "/switchyard.svg",
-      icon: "/switchyard.svg",
-      tag: payload.id ? `switchyard:${payload.id}` : undefined,
+      badge: "/in-progress.svg",
+      icon: "/in-progress.svg",
+      tag: payload.id ? `in-progress:${payload.id}` : undefined,
       data: { url: payload.url || "/", id: payload.id },
       renotify: payload.kind === "failed" || payload.kind === "needs-input",
       requireInteraction: payload.kind === "needs-input",
@@ -30,7 +30,7 @@ self.addEventListener("notificationclick", (event) => {
     const candidate = new URL(event.notification.data?.url || "/", self.location.origin);
     if (candidate.origin === self.location.origin) {
       if (event.notification.data?.id)
-        candidate.searchParams.set("switchyardEvent", event.notification.data.id);
+        candidate.searchParams.set("in-progress-event", event.notification.data.id);
       target = candidate.href;
     }
   } catch {
