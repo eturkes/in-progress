@@ -29,6 +29,7 @@ afterEach(() => {
 function fixture(stage = "candidate_final"): {
   integrations: IntegrationRegistry;
   projectRoot: string;
+  alignRoot: string;
 } {
   const projectRoot = join(root("integration-project"), "workspace's boundary");
   mkdirSync(projectRoot);
@@ -69,6 +70,7 @@ function fixture(stage = "candidate_final"): {
   return {
     integrations: new IntegrationRegistry(config.integrations, projects, config.dataDir),
     projectRoot,
+    alignRoot,
   };
 }
 
@@ -165,7 +167,7 @@ describe("fixed integration adapters", () => {
   });
 
   test("isolates Align imports and startup hooks from the selected project", async () => {
-    const { integrations, projectRoot } = fixture();
+    const { integrations, projectRoot, alignRoot } = fixture();
     const marker = join(projectRoot, "project-python-executed");
     writeFileSync(
       join(projectRoot, "align.py"),
@@ -179,6 +181,45 @@ describe("fixed integration adapters", () => {
     await integrations.dispatch("fixture", "align.status", undefined);
 
     expect(existsSync(marker)).toBe(false);
+    expect(existsSync(join(alignRoot, "src/align/__pycache__"))).toBe(false);
+  });
+
+  test("runs Align with bytecode disabled and an explicit isolated environment", async () => {
+    const directory = root("integration-python-wrapper");
+    const executable = join(directory, "python-recorder");
+    const argvFile = join(directory, "argv");
+    const envFile = join(directory, "env");
+    writeFileSync(
+      executable,
+      [
+        "#!/bin/sh",
+        'printf \'%s\\n\' "$@" > "${0%/*}/argv"',
+        'env | sort > "${0%/*}/env"',
+        'exec /usr/bin/python3 "$@"',
+        "",
+      ].join("\n"),
+    );
+    chmodSync(executable, 0o755);
+    const inheritedKey = "IN_PROGRESS_ALIGN_ENV_LEAK";
+    const inheritedValue = process.env[inheritedKey];
+    process.env[inheritedKey] = "must-not-propagate";
+    try {
+      const { integrations } = fixture();
+      integrations.config.align!.pythonExecutable = executable;
+
+      await integrations.dispatch("fixture", "align.status", undefined);
+    } finally {
+      if (inheritedValue === undefined) delete process.env[inheritedKey];
+      else process.env[inheritedKey] = inheritedValue;
+    }
+
+    const argv = readFileSync(argvFile, "utf8").split("\n");
+    const environment = readFileSync(envFile, "utf8");
+    expect(argv.slice(0, 4)).toEqual(["-I", "-B", "-S", "-c"]);
+    expect(environment).toContain("LANG=C.UTF-8\n");
+    expect(environment).toContain("LC_ALL=C.UTF-8\n");
+    expect(environment).toContain("PATH=/usr/bin:/bin\n");
+    expect(environment).not.toContain(`${inheritedKey}=`);
   });
 
   test("renders only canonical project-local Drift JSON through the configured binary", async () => {
@@ -356,6 +397,57 @@ describe("fixed integration adapters", () => {
     expect(String(failure)).not.toContain(projectRoot);
     expect(String(failure)).not.toContain(treeRoot);
     await integrations.close();
+  });
+
+  test("closes incompatible Tree Complete services without caching cleanup failures", async () => {
+    const treeRoot = root("tree-incompatible-service");
+    const moduleDirectory = join(treeRoot, "dist/server/server");
+    mkdirSync(moduleDirectory, { recursive: true });
+    writeFileSync(
+      join(moduleDirectory, "embedded.js"),
+      [
+        "import { appendFileSync } from 'node:fs';",
+        "export const TREE_COMPLETE_PUBLIC_RESPONSE_MAX_BYTES = 4194304;",
+        "export async function createEmbeddedService(options) {",
+        "  return {",
+        "    async workspace() { return {}; },",
+        "    async close() {",
+        "      appendFileSync(options.targetRepo + '/tree-close.log', 'close\\n');",
+        "      if (options.targetRepo.includes('cleanup-failure')) throw new Error('cleanup leaked ' + options.targetRepo);",
+        "    }",
+        "  };",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    for (const label of ["cleanup-success", "cleanup-failure"]) {
+      const projectRoot = root(`tree-incompatible-${label}`);
+      const config = configForTests(projectRoot, {
+        integrations: {
+          treeComplete: { sourceDirectory: treeRoot, mode: "preview" },
+        },
+      });
+      const integrations = new IntegrationRegistry(
+        config.integrations,
+        new ProjectRegistry(config.projects),
+        config.dataDir,
+      );
+
+      const failure = await integrations
+        .dispatch("fixture", "tree-complete.workspace", undefined)
+        .catch((error: unknown) => error);
+
+      expect(failure).toMatchObject({
+        status: 503,
+        message: "Tree Complete embedded service is incompatible",
+      });
+      expect(String(failure)).not.toContain("cleanup leaked");
+      expect(readFileSync(join(projectRoot, "tree-close.log"), "utf8")).toBe("close\n");
+      const firstClose = integrations.close();
+      expect(integrations.close()).toBe(firstClose);
+      await expect(firstClose).resolves.toBeUndefined();
+    }
   });
 
   test("rejects a Tree Complete embedded-module symlink escape", async () => {

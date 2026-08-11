@@ -242,6 +242,7 @@ export class IntegrationRegistry {
       [
         integration.pythonExecutable,
         "-I",
+        "-B",
         "-S",
         "-c",
         ALIGN_BOOTSTRAP,
@@ -368,7 +369,7 @@ export class IntegrationRegistry {
       } catch {
         throw new HttpError(503, "Tree Complete integration is not built");
       }
-      let service: TreeCompleteService;
+      let service: unknown;
       try {
         service = await module.createEmbeddedService({
           targetRepo: project.path,
@@ -378,15 +379,24 @@ export class IntegrationRegistry {
       } catch {
         throw new HttpError(503, "Tree Complete integration could not start");
       }
+      const workspace = treeServiceMethod(service, "workspace");
+      const createFork = treeServiceMethod(service, "createFork");
+      const close = treeServiceMethod(service, "close");
       if (
-        !service ||
-        typeof service.workspace !== "function" ||
-        typeof service.createFork !== "function" ||
-        typeof service.close !== "function"
+        typeof workspace !== "function" ||
+        typeof createFork !== "function" ||
+        typeof close !== "function"
       ) {
+        if (typeof close === "function") {
+          try {
+            await Reflect.apply(close, service, []);
+          } catch {
+            // Preserve the stable compatibility failure; the rejected candidate is never cached.
+          }
+        }
         throw new HttpError(503, "Tree Complete embedded service is incompatible");
       }
-      return service;
+      return service as TreeCompleteService;
     })();
     this.#treeServices.set(projectId, pending);
     void pending.catch(() => this.#treeServices.delete(projectId));
@@ -423,6 +433,17 @@ export class IntegrationRegistry {
       }
     })();
     return this.#closing;
+  }
+}
+
+function treeServiceMethod(service: unknown, name: "workspace" | "createFork" | "close"): unknown {
+  if (service === null || (typeof service !== "object" && typeof service !== "function")) {
+    return undefined;
+  }
+  try {
+    return Reflect.get(service, name);
+  } catch {
+    return undefined;
   }
 }
 
