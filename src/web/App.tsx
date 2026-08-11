@@ -637,6 +637,7 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
               api={api}
               project={project}
               plugin={plugin}
+              treeCompleteMode={bootstrapData.authority.treeCompleteMode}
               onStatus={setCurrentPluginStatus}
               onToast={showToast}
             />

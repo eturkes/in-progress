@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { NotificationEventInputSchema, PluginManifestSchema } from "../src/shared/contracts";
 import { DEVELOPMENT_CSP_NONCE_PLACEHOLDER } from "../src/shared/development";
+import { authorizePluginRequest } from "../src/web/plugin-authority";
 import viteConfig from "../vite.config";
 
 describe("shared trust-boundary contracts", () => {
@@ -57,5 +58,109 @@ describe("shared trust-boundary contracts", () => {
     expect(() => PluginManifestSchema.parse({ ...manifest, entry: "plugin.js" })).toThrow();
     expect(() => PluginManifestSchema.parse({ ...manifest, entry: "nested/index.html" })).toThrow();
     expect(() => PluginManifestSchema.parse({ ...manifest, id: "terminal" })).toThrow();
+  });
+
+  test("ecosystem build uses Preview's checkout-owned launcher", async () => {
+    const source = await Bun.file(new URL("../scripts/build-ecosystem.ts", import.meta.url)).text();
+    expect(source).toContain('resolve(projectsRoot, "preview/bin/preview")');
+    expect(source).not.toContain('"uv", "run"');
+    expect(source).toContain('"tree-complete.workspace"');
+    expect(source).toContain("TREE_COMPLETE_PUBLIC_RESPONSE_MAX_BYTES");
+  });
+
+  test("Tree Complete mutations require a trusted host confirmation", () => {
+    const prompts: string[] = [];
+    const confirm = (message: string) => {
+      prompts.push(message);
+      return false;
+    };
+
+    expect(
+      authorizePluginRequest(
+        "project.tree",
+        undefined,
+        "Tree Complete",
+        "tree-complete",
+        "Fixture",
+        "fixture",
+        "preview",
+        confirm,
+      ),
+    ).toEqual({ allowed: true, params: undefined });
+    expect(prompts).toHaveLength(0);
+
+    expect(
+      authorizePluginRequest(
+        "tree-complete.createFork",
+        { baseVersionId: "root", decisionId: "storage", alternativeId: "sqlite" },
+        "Tree Complete",
+        "tree-complete",
+        "Fixture",
+        "fixture",
+        "preview",
+        confirm,
+      ),
+    ).toEqual({ allowed: false, error: "Fork canceled by the user" });
+    expect(prompts[0]).toMatch(/Tree Complete.*Fixture/s);
+    expect(prompts[0]).toMatch(/Plugin ID: tree-complete.*Project ID: fixture/s);
+    expect(prompts[0]).toMatch(/Base version: root.*Decision: storage.*Alternative: sqlite/s);
+    expect(prompts[0]).toMatch(
+      /simulation state.*does not run Codex.*change the project repository/s,
+    );
+
+    prompts.length = 0;
+    authorizePluginRequest(
+      "tree-complete.createFork",
+      { baseVersionId: "root", decisionId: "storage", alternativeId: "sqlite" },
+      "Tree Complete",
+      "tree-complete",
+      "Fixture",
+      "fixture",
+      "codex",
+      confirm,
+    );
+    expect(prompts[0]).toMatch(
+      /codex --yolo.*unsandboxed.*OS user.*anything.*Git branch\/worktree.*commit/s,
+    );
+  });
+
+  test("rejects malformed Tree fork requests before prompting and escapes hostile labels", () => {
+    const prompts: string[] = [];
+    const confirm = (message: string) => {
+      prompts.push(message);
+      return false;
+    };
+
+    expect(
+      authorizePluginRequest(
+        "tree-complete.createFork",
+        { baseVersionId: "", decisionId: "storage", alternativeId: "sqlite" },
+        "Tree Complete",
+        "tree-complete",
+        "Fixture",
+        "fixture",
+        "preview",
+        confirm,
+      ),
+    ).toEqual({ allowed: false, error: "Invalid Tree Complete fork request" });
+    expect(prompts).toHaveLength(0);
+
+    authorizePluginRequest(
+      "tree-complete.createFork",
+      { baseVersionId: "root\n", decisionId: "storage\u202e", alternativeId: "sqlite" },
+      "Tree\nComplète\u202e",
+      "tree-complete",
+      "Fixture\u2028spoof",
+      "fixture",
+      "preview",
+      confirm,
+    );
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).not.toContain("\u202e");
+    expect(prompts[0]).not.toContain("\u2028");
+    expect(prompts[0]).toContain("\\u{202e}");
+    expect(prompts[0]).toContain("\\u{2028}");
+    expect(prompts[0]).toContain("Compl\\u{e8}te");
+    expect(prompts[0]).toContain("root\\u{a}");
   });
 });

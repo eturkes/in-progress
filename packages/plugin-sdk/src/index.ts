@@ -5,7 +5,11 @@ export type Capability =
   | "project.tree"
   | "project.readText"
   | "project.git"
-  | "host.notify";
+  | "host.notify"
+  | "align.status"
+  | "drift.render"
+  | "tree-complete.workspace"
+  | "tree-complete.createFork";
 
 export interface PluginProject {
   id: string;
@@ -39,6 +43,7 @@ export interface ProjectText {
 }
 
 export interface GitSummary {
+  available: boolean;
   branch: string | null;
   upstream: string | null;
   ahead: number;
@@ -47,6 +52,33 @@ export interface GitSummary {
   modified: number;
   untracked: number;
   clean: boolean;
+}
+
+export interface AlignStatus {
+  initialized: boolean;
+  contract: {
+    state: "missing" | "ambiguous" | "provisional" | "accepted";
+    id: string | null;
+  };
+  latest: {
+    stage: "pre_task" | "in_progress" | "candidate_final" | "released" | null;
+    assessmentCount: number;
+    reportCount: number;
+  };
+  totals: {
+    amendments: number;
+    assessments: number;
+    checkpoints: number;
+    contracts: number;
+    reports: number;
+    snapshots: number;
+  };
+  nextAction: { command: string; reason: string } | null;
+}
+
+export interface DriftRender {
+  path: string;
+  text: string;
 }
 
 export type EventKind = "needs-input" | "completed" | "failed" | "system";
@@ -75,6 +107,13 @@ export interface PluginMethodMap {
   "project.readText": { params: { path: string }; result: ProjectText };
   "project.git": { params: undefined; result: GitSummary };
   "host.notify": { params: NotificationInput; result: NotificationEvent };
+  "align.status": { params: undefined; result: AlignStatus };
+  "drift.render": { params: { path: string }; result: DriftRender };
+  "tree-complete.workspace": { params: undefined; result: unknown };
+  "tree-complete.createFork": {
+    params: { baseVersionId: string; decisionId: string; alternativeId: string };
+    result: unknown;
+  };
 }
 
 export interface PluginTheme {

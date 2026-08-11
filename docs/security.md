@@ -81,7 +81,7 @@ Every browser mutation requires:
 - `Sec-Fetch-Site` absent or `same-origin`;
 - request identity equal to session identity.
 
-API responses omit CORS grants. Bootstrap rejects cross-site Fetch Metadata/origins before creating a session. It may create a new session; other authenticated routes refresh only the server-side idle timestamp. The cookie is not extended, so an active browser bootstraps a replacement after at most seven days.
+API and plugin-entry responses omit CORS grants. Bootstrap rejects cross-site Fetch Metadata/origins before creating a session. It may create a new session; other authenticated routes—including private, non-stored plugin entry documents that may embed dashboard evidence—refresh only the server-side idle timestamp. Declared non-document plugin assets remain public solely for opaque-origin CORS loading. The cookie is not extended, so an active browser bootstraps a replacement after at most seven days.
 
 WebSockets need separate treatment because browsers can send cookies during a cross-origin upgrade and normal CORS does not protect the handshake. in-progress requires exact origin, the `in-progress.terminal.v1` subprotocol, the browser session cookie, unchanged identity, and a one-use 30-second ticket minted through a CSRF-protected POST. [RFC 6455 origin guidance](https://datatracker.ietf.org/doc/html/rfc6455#section-10.2), [xterm.js WebSocket warning](https://xtermjs.org/docs/guides/security/#3-websockets)
 
@@ -128,7 +128,7 @@ Plugin URLs share the host URL origin for simple static serving, but two indepen
 - iframe attribute: `sandbox="allow-scripts"`;
 - response CSP: `sandbox allow-scripts`.
 
-The child receives a unique opaque origin. Host cookies/storage/DOM, service workers, forms, nested frames, workers, popups, top navigation, and external network endpoints are unavailable. Plugin document CSP permits installed inline code and limits script/style/image/font/connect requests to that plugin's canonical static URL prefix; the explicit URL is necessary because `'self'` does not match the effective opaque origin. Inline permission adds no host authority—the entire configured plugin is already trusted with its manifest grants—and enables self-contained bundles that survive privacy/wallet extensions blocking opaque-frame subresources. Only the entry and manifest-declared public assets are served. Declared non-document assets receive wildcard CORS/CORP so ES modules load from the serialized opaque origin (`Origin: null`); declared navigable HTML/SVG/XML/PDF assets retain document sandbox CSP. Privileged API responses and undeclared plugin files receive no CORS or static-file access. The [HTML Standard](https://html.spec.whatwg.org/multipage/iframe-embed-object.html#attr-iframe-sandbox) defines the sandbox flags.
+The child receives a unique opaque origin. Host cookies/storage/DOM, service workers, forms, nested frames, workers, popups, top navigation, and external network endpoints are unavailable. Plugin document CSP permits installed inline code and limits script/style/image/font/connect requests to that plugin's canonical static URL prefix; the explicit URL is necessary because `'self'` does not match the effective opaque origin. Inline permission adds no host authority—the entire configured plugin is already trusted with its manifest grants—and enables self-contained bundles that survive privacy/wallet extensions blocking opaque-frame subresources. A live identity-bound browser session is required before the entry document's bytes are served; manifests and canonical-file checks forbid declaring the entry or a symlink alias as a public asset. Only manifest-declared non-document assets receive wildcard CORS/CORP so ES modules load from the serialized opaque origin (`Origin: null`); declared navigable HTML/SVG/XML/PDF assets retain document sandbox CSP. Privileged API responses and undeclared plugin files receive no CORS or static-file access. The [HTML Standard](https://html.spec.whatwg.org/multipage/iframe-embed-object.html#attr-iframe-sandbox) defines the sandbox flags.
 
 The only authority is a new `MessagePort` created for one plugin + selected project. The host:
 
@@ -136,6 +136,8 @@ The only authority is a new `MessagePort` created for one plugin + selected proj
 - requires the random init nonce back on that port;
 - validates every message shape and timeout;
 - checks the manifest capability on every method;
+- validates Tree Complete's three fork IDs before showing a mode/ID-specific trusted-host
+  confirmation with stable plugin/project IDs immediately before every request;
 - takes project identity from trusted frame state, never plugin parameters;
 - validates/canonicalizes paths again server-side;
 - closes the port on navigation/project change/disposal and never reconnects a navigated frame.
@@ -150,7 +152,24 @@ Adding a plugin directory is a security decision. Review its manifest and built 
 - Plugin entry/declared assets must remain within the canonical plugin root; absolute, hidden, malformed, missing, non-file, and symlink-escape requests fail. Undeclared files are private.
 - `project.readText` accepts a relative path, resolves its final realpath beneath the selected project, requires a regular nonbinary file, and returns at most 256 KiB.
 - Project tree is depth/entry bounded, does not descend symlinks, and omits common dependency/state/build directories.
-- Git status uses an asynchronous subprocess with a three-second timeout, 1 MiB output cap, and two-second per-project cache.
+- Git status uses a sanitized environment, disables replacement objects plus project-configured
+  fsmonitor/hooks, and runs in a detached process group with a three-second hard deadline, 1 MiB
+  output cap, and two-second per-project cache. Failure reports `available: false`/`clean: false`.
+- Align and Drift executable authority comes only from canonical host configuration. Align uses
+  `python -I -S`, a fixed bootstrap/source root, a non-project working directory, and a sanitized
+  environment, so project Python modules/startup hooks cannot execute. Both adapters use fixed argv,
+  detached process groups, hard deadlines, output caps, UTF-8/schema checks, and no shell. Plugins
+  cannot choose commands, roots, models, or mutating analyzer operations.
+- Tree Complete is an explicitly configured host integration, not an arbitrary plugin backend. Its
+  embedded service receives the selected canonical project, a host-owned private data directory,
+  and the configured preview/Codex mode. RPC exposes only workspace retrieval and three fork IDs;
+  responses are JSON-size-bounded, structurally checked, and scrubbed of host paths. Upstream
+  worst-case admission refuses a new fork before reservation when retained public history reaches
+  that boundary.
+- Tree preview writes only host-owned simulation state. Codex mode requires a committed project
+  manifest parsed from raw `HEAD` with replacement/graft/shallow overrides disabled, then runs
+  inherited `codex --yolo exec` unsandboxed with the workstation user's full authority. Its
+  confirmation states that boundary; approval is authorization, not containment.
 - Running sessions are capped per project.
 
 These controls protect the host broker from confused-deputy/path traversal attacks. They do not protect the user from code intentionally executed in the full terminal.
@@ -182,6 +201,7 @@ Browser permission must follow an explicit user gesture. On iOS/iPadOS, Web Push
 | Cross-site WebSocket hijack      | Origin + session-bound one-use ticket + subprotocol              | ticket exposure through external query logging        |
 | Host XSS/dependency compromise   | self-only built assets, CSP, pinned dependencies                 | host JS compromise equals shell compromise            |
 | Malicious plugin                 | opaque-origin iframe+CSP, no direct connect, capability broker   | deceptive UI; navigation can leak granted data        |
+| Privileged plugin mutation       | host-owned per-call confirmation + project-fixed narrow adapter  | user can approve a deceptive request                  |
 | Path/symlink escape              | startup realpath + request-time beneath-root checks              | TOCTOU from a trusted local process changing paths    |
 | Hostile terminal output          | xterm parser, bounded frames/replay, no HTML injection           | terminal emulator/addon vulnerability                 |
 | Output/session DoS               | frame/backpressure/idle/ring/session limits                      | intentionally run process can consume host CPU/RAM    |

@@ -59,6 +59,9 @@ describe("plugin manifest and registry", () => {
     expect(() => PluginManifestSchema.parse(manifest("hidden", { assets: [".env"] }))).toThrow(
       "hidden",
     );
+    expect(() =>
+      PluginManifestSchema.parse(manifest("public-entry", { assets: ["index.html"] })),
+    ).toThrow("must not also be a public asset");
   });
 
   test("loads static assets, advertises capabilities, and rejects undeclared capabilities", () => {
@@ -118,6 +121,13 @@ describe("plugin manifest and registry", () => {
     });
     symlinkSync(join(outside, "outside.html"), join(declaredPlugin, "outside.html"));
     expect(() => new PluginRegistry([declaredAssets])).toThrow("asset escapes its root");
+
+    const aliasedEntry = root("aliased-plugin-entry");
+    const aliasedPlugin = createPlugin(aliasedEntry, "aliased", { assets: ["entry-alias.html"] });
+    symlinkSync("index.html", join(aliasedPlugin, "entry-alias.html"));
+    expect(() => new PluginRegistry([aliasedEntry])).toThrow(
+      "entry document must not also be a public asset",
+    );
   });
 });
 
@@ -155,5 +165,11 @@ describe("validatePlugin", () => {
     const escaping = createPlugin(plugins, "escaping");
     symlinkSync(join(outside, "secret.js"), join(escaping, "secret.js"));
     await expect(validatePlugin(escaping)).rejects.toThrow("asset symlink escapes its root");
+
+    const aliased = createPlugin(plugins, "aliased-entry", { assets: ["entry-alias.html"] });
+    symlinkSync("index.html", join(aliased, "entry-alias.html"));
+    await expect(validatePlugin(aliased)).rejects.toThrow(
+      "entry document must not also be a public asset",
+    );
   });
 });

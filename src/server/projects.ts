@@ -3,12 +3,26 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 import { z } from "zod";
 import type { GitSummary, ProjectDto, ProjectTreeEntry } from "../shared/contracts";
 import type { ProjectConfig } from "./config";
+import { runBounded } from "./process";
 import { HttpError } from "./security";
 
 const TREE_SKIP = new Set([".git", ".data", "node_modules", "dist", "coverage"]);
+const GIT_STATUS_ENV = {
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_NOSYSTEM: "1",
+  GIT_NO_REPLACE_OBJECTS: "1",
+  GIT_OPTIONAL_LOCKS: "0",
+  GIT_PAGER: "cat",
+  GIT_TERMINAL_PROMPT: "0",
+  LANG: "C.UTF-8",
+  LC_ALL: "C.UTF-8",
+  PAGER: "cat",
+  PATH: "/usr/bin:/bin",
+};
 
-function emptyGitSummary(): GitSummary {
+function emptyGitSummary(available = false): GitSummary {
   return {
+    available,
     branch: null,
     upstream: null,
     ahead: 0,
@@ -16,7 +30,7 @@ function emptyGitSummary(): GitSummary {
     staged: 0,
     modified: 0,
     untracked: 0,
-    clean: true,
+    clean: available,
   };
 }
 
@@ -67,44 +81,34 @@ export class ProjectRegistry {
   }
 
   async #readGit(project: ProjectConfig): Promise<GitSummary> {
-    const child = Bun.spawn(
-      ["git", "status", "--porcelain=v2", "--branch", "--untracked-files=normal"],
-      {
-        cwd: project.path,
-        stderr: "ignore",
-        stdout: "pipe",
-      },
-    );
-    const timer = setTimeout(() => child.kill("SIGKILL"), 3_000);
-    const reader = child.stdout.getReader();
-    const chunks: Uint8Array[] = [];
-    let size = 0;
+    let stdout: string;
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        size += value.byteLength;
-        if (size > 1024 * 1024) {
-          child.kill("SIGKILL");
-          return emptyGitSummary();
-        }
-        chunks.push(value);
-      }
-      if ((await child.exited) !== 0) return emptyGitSummary();
-    } finally {
-      clearTimeout(timer);
-      reader.releaseLock();
+      ({ stdout } = await runBounded(
+        [
+          "git",
+          "-c",
+          "core.fsmonitor=false",
+          "-c",
+          "core.hooksPath=/dev/null",
+          "status",
+          "--porcelain=v2",
+          "--branch",
+          "--untracked-files=normal",
+        ],
+        {
+          cwd: project.path,
+          env: GIT_STATUS_ENV,
+          timeoutMs: 3_000,
+          stdoutBytes: 1024 * 1024,
+          label: "Git status",
+        },
+      ));
+    } catch {
+      return emptyGitSummary();
     }
 
-    const bytes = new Uint8Array(size);
-    let offset = 0;
-    for (const chunk of chunks) {
-      bytes.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
-
-    const summary = emptyGitSummary();
-    for (const line of new TextDecoder().decode(bytes).split("\n")) {
+    const summary = emptyGitSummary(true);
+    for (const line of stdout.split("\n")) {
       if (line.startsWith("# branch.head ")) summary.branch = line.slice(14).trim();
       else if (line.startsWith("# branch.upstream ")) summary.upstream = line.slice(18).trim();
       else if (line.startsWith("# branch.ab ")) {
@@ -168,18 +172,7 @@ export class ProjectRegistry {
       .object({ path: z.string().min(1).max(1_024) })
       .strict()
       .parse(rawParams);
-    const project = this.get(id);
-    if (isAbsolute(params.path)) throw new HttpError(400, "Absolute paths are not allowed");
-    const candidate = resolve(project.path, params.path);
-    const canonical = await realpath(candidate).catch(() => {
-      throw new HttpError(404, "File not found");
-    });
-    const pathFromRoot = relative(project.path, canonical);
-    if (pathFromRoot.startsWith(`..${sep}`) || pathFromRoot === ".." || isAbsolute(pathFromRoot)) {
-      throw new HttpError(403, "Path escapes project root");
-    }
-    const info = await stat(canonical);
-    if (!info.isFile()) throw new HttpError(400, "Path is not a regular file");
+    const canonical = await this.resolveFile(id, params.path);
     const maxBytes = 256 * 1024;
     const bytes = new Uint8Array(
       await Bun.file(canonical)
@@ -195,5 +188,21 @@ export class ProjectRegistry {
       text: new TextDecoder("utf-8", { fatal: false }).decode(visible),
       truncated,
     };
+  }
+
+  async resolveFile(id: string, projectRelativePath: string): Promise<string> {
+    const project = this.get(id);
+    if (isAbsolute(projectRelativePath)) throw new HttpError(400, "Absolute paths are not allowed");
+    const candidate = resolve(project.path, projectRelativePath);
+    const canonical = await realpath(candidate).catch(() => {
+      throw new HttpError(404, "File not found");
+    });
+    const pathFromRoot = relative(project.path, canonical);
+    if (pathFromRoot.startsWith(`..${sep}`) || pathFromRoot === ".." || isAbsolute(pathFromRoot)) {
+      throw new HttpError(403, "Path escapes project root");
+    }
+    const info = await stat(canonical);
+    if (!info.isFile()) throw new HttpError(400, "Path is not a regular file");
+    return canonical;
   }
 }

@@ -2,16 +2,17 @@
 
 ## Decisions
 
-| Concern         | Decision                                                                                              |
-| --------------- | ----------------------------------------------------------------------------------------------------- |
-| Runtime         | Pinned Bun + TypeScript; one unprivileged process                                                     |
-| HTTP/realtime   | Native `Bun.serve` + native binary WebSockets/SSE                                                     |
-| Terminal        | `Bun.Terminal` PTY per session; xterm.js in the trusted host UI                                       |
-| UI              | React/Vite installable PWA; responsive project rail + plugin rail + view pane                         |
-| Persistence     | `bun:sqlite` in `.data/in-progress.db`; PTY processes remain in memory                                |
-| Remote boundary | Loopback HTTP behind private Tailscale Serve HTTPS                                                    |
-| Plugins         | Local static directories; same URL origin, forced opaque iframe origin, `MessageChannel` capabilities |
-| Notifications   | SQLite inbox + SSE foreground delivery + VAPID Web Push background delivery                           |
+| Concern         | Decision                                                                                           |
+| --------------- | -------------------------------------------------------------------------------------------------- |
+| Runtime         | Pinned Bun + TypeScript; one unprivileged process                                                  |
+| HTTP/realtime   | Native `Bun.serve` + native binary WebSockets/SSE                                                  |
+| Terminal        | `Bun.Terminal` PTY per session; xterm.js in the trusted host UI                                    |
+| UI              | React/Vite installable PWA; responsive project rail + plugin rail + view pane                      |
+| Persistence     | `bun:sqlite` in `.data/in-progress.db`; PTY processes remain in memory                             |
+| Remote boundary | Loopback HTTP behind private Tailscale Serve HTTPS                                                 |
+| Plugins         | Local static directories; forced opaque iframe origin; project-bound `MessageChannel` capabilities |
+| Integrations    | Optional host-owned fixed adapters for Align, Drift, and Tree Complete; no generic plugin backend  |
+| Notifications   | SQLite inbox + SSE foreground delivery + VAPID Web Push background delivery                        |
 
 The Bun primitives remove native addons and extra daemons: `Bun.spawn` attaches a real PTY, `Bun.serve` owns HTTP/WebSocket lifecycle and limits, and `bun:sqlite` supplies a synchronous embedded database. Primary references: [PTY](https://bun.sh/docs/runtime/child-process#terminal-pty-support), [WebSockets](https://bun.sh/docs/runtime/http/websockets), [SQLite](https://bun.sh/docs/runtime/sqlite).
 
@@ -31,6 +32,8 @@ phone / desktop browser
 │ ├─ JSON API + event SSE        └─ sandboxed plugin static assets     │
 │                                                                      │
 │ project registry ─ plugin capability broker ─ notification service   │
+│                         │                                            │
+│              fixed native/embedded integrations                      │
 │          │                         │                    │              │
 │     Bun.Terminal             local files        bun:sqlite + Push    │
 │          │                                              │             │
@@ -47,15 +50,25 @@ Development substitutes Vite at `IN_PROGRESS_WEB_PROXY=http://127.0.0.1:5173`; a
 1. resolve the config and its containing root;
 2. apply defaults and reject unknown fields;
 3. refuse a non-loopback server host unless `IN_PROGRESS_UNSAFE_BIND=1`;
-4. expand `~/`, resolve project/plugin paths relative to the config, require existence, then canonicalize with `realpath`;
+4. expand `~/`, resolve project/plugin/integration paths relative to the config, require existence, then canonicalize with `realpath`;
 5. reject duplicate project/plugin IDs;
-6. place runtime state in `<config-root>/.data`.
+6. in Tree Complete Codex mode, load the canonical built preflight and strictly validate each
+   project's manifest from exact committed `HEAD`;
+7. place runtime state in `<config-root>/.data`.
 
 The machine-readable contract is [in-progress-config.schema.json](in-progress-config.schema.json).
 
 ## Project and terminal lifecycle
 
-Project configuration is static for a server run. Each project record supplies the trusted canonical working directory used for Git queries, plugin reads, and new shells.
+Project configuration is static for a server run. Each project record supplies the trusted canonical working directory used for sanitized read-only Git queries, plugin reads, and new shells.
+
+Integration configuration is also static and host-owned. Align gets one fixed read-only status
+invocation; Drift gets one fixed validating render invocation; Tree Complete loads one built
+embedded service per selected project with host-fixed project/data roots and runner mode. Static
+plugin manifests grant access to those named methods but cannot configure code, argv, paths, or
+mode. Align starts through isolated Python with a fixed trusted source path. Tree fork mutation
+additionally crosses a trusted React-host confirmation containing the configured mode and validated
+fork IDs.
 
 `POST /api/projects/:project/sessions` creates:
 
@@ -99,7 +112,7 @@ Replay and live output are emitted in at most 32 KiB frames. Replay starts with 
 
 `GET /api/bootstrap` establishes an in-memory browser session and returns the CSRF token, identity, projects, plugins, and push status. Server entries expire after seven idle days; the `HttpOnly`, `SameSite=Strict` cookie expires at most seven days after mint and is `Secure` when the externally observed origin is HTTPS. Any server restart invalidates sessions; a still-open browser bootstraps a replacement.
 
-Bootstrap establishes or refreshes the session; other read endpoints require and refresh an existing session. Every browser mutation requires the cookie, `X-In-Progress-CSRF`, exact expected/allowlisted `Origin`, same Tailscale identity, and—when supplied—`Sec-Fetch-Site: same-origin`.
+Bootstrap establishes or refreshes the session; other read endpoints and plugin entry documents require and refresh an existing session. Declared plugin module/style/font/image assets remain unauthenticated because the opaque-origin frame cannot attach host credentials to their CORS loads. Every browser mutation requires the cookie, `X-In-Progress-CSRF`, exact expected/allowlisted `Origin`, same Tailscale identity, and—when supplied—`Sec-Fetch-Site: same-origin`.
 
 Core routes:
 
@@ -117,11 +130,12 @@ Core routes:
 | `POST/DELETE /api/notifications/subscriptions`    | manage browser push subscription     |
 | `POST /api/notifications/test`                    | test inbox + push                    |
 | `POST /api/hooks/notify`                          | terminal/agent bearer hook           |
+| `GET /plugins/:id/`                               | authenticated plugin entry document  |
 | `GET /healthz`                                    | process health/version               |
 
 ## Plugins
 
-The entry and manifest-declared assets are served from `/plugins/:id/`; undeclared plugin-root files remain private. Document CSP includes `sandbox allow-scripts`; the host iframe also has `sandbox="allow-scripts"`. Omitting `allow-same-origin` changes the child to a unique opaque origin even though its URL shares the host origin. It therefore has no host cookies/storage/DOM access. CSP limits connections and subresources to that plugin's static URL prefix, enabling declared ES-module graphs while blocking host APIs and external endpoints. Inline code is permitted because a configured plugin is already trusted with its declared capabilities; self-contained entry documents are the most extension-compatible package. Browsers do not apply connect restrictions to document navigation, so an installed plugin can navigate its own frame to disclose data returned by granted capabilities. Plugin installation remains a confidentiality trust decision.
+The authenticated entry and manifest-declared assets are served from `/plugins/:id/`; undeclared plugin-root files remain private. Document CSP includes `sandbox allow-scripts`; the host iframe also has `sandbox="allow-scripts"`. Omitting `allow-same-origin` changes the child to a unique opaque origin even though its URL shares the host origin. It therefore has no host cookies/storage/DOM access. CSP limits connections and subresources to that plugin's static URL prefix, enabling declared ES-module graphs while blocking host APIs and external endpoints. Inline code is permitted because a configured plugin is already trusted with its declared capabilities; self-contained entry documents are the most extension-compatible package. Browsers do not apply connect restrictions to document navigation, so an installed plugin can navigate its own frame to disclose data returned by granted capabilities. Plugin installation remains a confidentiality trust decision.
 
 The React host creates one `MessageChannel` per `{plugin,project}` entry load, transfers only minimal project identity, fixes project context before RPC, and brokers only manifest-declared methods. Navigation, project/view switch, or frame disposal closes the channel; a navigated frame never receives a replacement. See [plugin system](plugin-system.md).
 

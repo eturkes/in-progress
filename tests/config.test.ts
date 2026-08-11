@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadConfig } from "../src/server/config";
 import { removeDirectory, tempDirectory, writeJson } from "./helpers";
@@ -13,6 +13,20 @@ function root(): string {
   return path;
 }
 
+function writeTreeModule(sourceRoot: string, preflightBody = ""): void {
+  const moduleDirectory = join(sourceRoot, "dist/server/server");
+  mkdirSync(moduleDirectory, { recursive: true });
+  writeFileSync(
+    join(moduleDirectory, "embedded.js"),
+    [
+      "export const TREE_COMPLETE_PUBLIC_RESPONSE_MAX_BYTES = 4194304;",
+      "export async function createEmbeddedService() { throw new Error('not used'); }",
+      `export async function preflightProjectManifest(targetRepo) { ${preflightBody} }`,
+      "",
+    ].join("\n"),
+  );
+}
+
 afterEach(() => {
   for (const path of roots.splice(0)) removeDirectory(path);
   if (originalUnsafeBind === undefined) delete process.env.IN_PROGRESS_UNSAFE_BIND;
@@ -24,13 +38,31 @@ describe("loadConfig", () => {
     const directory = root();
     const project = join(directory, "workspace");
     const plugins = join(directory, "plugin-dist");
+    const align = join(directory, "align");
+    const treeComplete = join(directory, "tree-complete");
+    const drift = join(directory, "drift");
     mkdirSync(project);
     mkdirSync(plugins);
+    mkdirSync(align);
+    mkdirSync(treeComplete);
+    writeTreeModule(
+      treeComplete,
+      "if (!targetRepo.endsWith('/workspace')) throw new Error('wrong project');",
+    );
+    mkdirSync(join(project, ".tree-complete"));
+    writeFileSync(join(project, ".tree-complete/project.json"), "{}\n");
+    writeFileSync(drift, "binary");
+    chmodSync(drift, 0o755);
     symlinkSync("plugin-dist", join(directory, "plugins"));
     const configPath = join(directory, "in-progress.config.json");
     writeJson(configPath, {
       projects: [{ id: "demo", name: "Demo", path: "./workspace" }],
       pluginDirectories: ["./plugins"],
+      integrations: {
+        align: { sourceDirectory: "./align", pythonExecutable: drift },
+        drift: { executable: "./drift" },
+        treeComplete: { sourceDirectory: "./tree-complete", mode: "codex" },
+      },
     });
 
     const config = await loadConfig(configPath);
@@ -45,6 +77,14 @@ describe("loadConfig", () => {
       color: "#67d5b5",
     });
     expect(config.pluginDirectories).toEqual([realpathSync(plugins)]);
+    expect(config.integrations).toEqual({
+      align: {
+        sourceDirectory: realpathSync(align),
+        pythonExecutable: realpathSync(drift),
+      },
+      drift: { executable: realpathSync(drift) },
+      treeComplete: { sourceDirectory: realpathSync(treeComplete), mode: "codex" },
+    });
     expect(config.server).toEqual({
       host: "127.0.0.1",
       port: 4317,
@@ -101,5 +141,41 @@ describe("loadConfig", () => {
       projects: [{ id: "demo", name: "Demo", path: "workspace" }],
     });
     await expect(loadConfig(configPath)).rejects.toThrow("is not a directory");
+  });
+
+  test("preflights the per-project manifest required by Tree Complete codex mode", async () => {
+    const directory = root();
+    mkdirSync(join(directory, "workspace"));
+    const treeComplete = join(directory, "tree-complete");
+    mkdirSync(treeComplete);
+    writeTreeModule(treeComplete, "throw new Error('manifest is not committed');");
+    const configPath = join(directory, "in-progress.config.json");
+    writeJson(configPath, {
+      projects: [{ id: "demo", name: "Demo", path: "workspace" }],
+      integrations: {
+        treeComplete: { sourceDirectory: "tree-complete", mode: "codex" },
+      },
+    });
+
+    await expect(loadConfig(configPath)).rejects.toThrow(
+      "Tree Complete codex mode requires a valid committed project manifest",
+    );
+  });
+
+  test("requires Tree Complete's built preflight contract before codex mode", async () => {
+    const directory = root();
+    mkdirSync(join(directory, "workspace"));
+    mkdirSync(join(directory, "tree-complete"));
+    const configPath = join(directory, "in-progress.config.json");
+    writeJson(configPath, {
+      projects: [{ id: "demo", name: "Demo", path: "workspace" }],
+      integrations: {
+        treeComplete: { sourceDirectory: "tree-complete", mode: "codex" },
+      },
+    });
+
+    await expect(loadConfig(configPath)).rejects.toThrow(
+      "Tree Complete codex mode requires a compatible built integration",
+    );
   });
 });

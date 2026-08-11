@@ -144,6 +144,11 @@ export async function validatePlugin(inputPath: string): Promise<ValidatedPlugin
         `Plugin ${manifest.id} asset escapes its root or is not a regular file: ${assetPath}`,
       );
     }
+    if (asset === entry) {
+      throw new PluginValidationError(
+        `Plugin ${manifest.id} entry document must not also be a public asset`,
+      );
+    }
   }
 
   const assetCount = await validateAssets(root);

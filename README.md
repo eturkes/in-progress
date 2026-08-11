@@ -105,6 +105,44 @@ Installation trusts a plugin with data returned by its declared capabilities. Th
 
 The reference view lives at `examples/plugins/project-map`. See [plugin system](docs/plugin-system.md) for the manifest, RPC protocol, SDK, and separate-repository workflow.
 
+### Sibling ecosystem
+
+`in-progress.ecosystem.config.json` wires the sibling checkouts under `~/Projects` into one local
+control plane. Build their installable outputs, then start with that configuration:
+
+```sh
+pnpm ecosystem:build
+pnpm dev:ecosystem
+# production: pnpm build && pnpm start:ecosystem
+```
+
+| View          | Project-bound behavior                                                        | Host authority                         |
+| ------------- | ----------------------------------------------------------------------------- | -------------------------------------- |
+| Align         | Compact verified lifecycle + next action                                      | Fixed read-only `align status`         |
+| Drift         | Discovers candidate report JSON; renders only native-validator-clean reports  | Fixed `drift render`                   |
+| Preview       | Selects a validated packaged dashboard matching the active project ID         | None                                   |
+| Tree Complete | Explores/forks project-identified decision lineage; default simulates locally | Narrow embedded workspace/fork service |
+| Turbo Prompt  | Builds prompts from host-bound metadata, tree, instructions, and manifests    | Bounded project reads                  |
+
+The build command compiles Drift, Preview, Tree Complete, and Turbo Prompt, then validates all five
+manifests with the host validator. Each sibling repository still owns its full native quality gate.
+Preview packages only current-source published dashboards and includes a tracked `in-progress`
+dashboard; projects without a matching package display an explicit unavailable state. Generating a
+new dashboard remains a separate disclosure/token-spending action in the Preview checkout.
+
+Tree Complete preview state lives under host-owned `.data/` and does not mutate project files or Git
+state. `codex` mode is an explicit config change and requires each target to commit a valid
+`.tree-complete/project.json`; startup validates its strict contents from exact committed `HEAD`.
+Every fork RPC—simulation included—
+receives a trusted host confirmation showing mode and immutable IDs immediately before dispatch.
+Codex mode runs inherited `codex --yolo exec` unsandboxed as the current OS user, so it can access
+anything that user can; it creates retained Git branches/worktrees and commits. Shutdown drains a
+valid run and can wait until the runner's 30-minute timeout.
+
+Tree Complete pessimistically budgets every accepted fork's terminal public state and response
+envelope under the host's 4 MiB limit. At the boundary it rejects before reservation with `429`,
+leaving the readable retained history unchanged.
+
 ## Commands
 
 | Command                          | Purpose                                      |
@@ -113,6 +151,9 @@ The reference view lives at `examples/plugins/project-map`. See [plugin system](
 | `pnpm build`                     | SDK, PWA, and Bun server bundles             |
 | `pnpm start`                     | Run the production bundle                    |
 | `pnpm check`                     | Format, lint, types, tests, production build |
+| `pnpm ecosystem:build`           | Build + validate five sibling plugin outputs |
+| `pnpm dev:ecosystem`             | Run dev host with the sibling ecosystem      |
+| `pnpm start:ecosystem`           | Run built host with the sibling ecosystem    |
 | `pnpm plugin:validate -- <path>` | Validate a plugin root/manifest              |
 
 ## Documentation

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { ProjectRegistry } from "../src/server/projects";
 import { fixtureProject, removeDirectory, tempDirectory } from "./helpers";
@@ -22,15 +22,49 @@ describe("ProjectRegistry filesystem boundary", () => {
     expect(Bun.spawnSync(["git", "init", "-q"], { cwd: directory }).success).toBeTrue();
     writeFileSync(join(directory, "staged.txt"), "staged\n");
     writeFileSync(join(directory, "untracked.txt"), "untracked\n");
+    const fsmonitor = join(directory, ".git/hooks/project-fsmonitor");
+    const marker = join(directory, ".git/fsmonitor-executed");
+    writeFileSync(
+      fsmonitor,
+      `#!/bin/sh\nprintf called > ${JSON.stringify(marker)}\nprintf token\\n\n`,
+    );
+    chmodSync(fsmonitor, 0o755);
     expect(Bun.spawnSync(["git", "add", "staged.txt"], { cwd: directory }).success).toBeTrue();
+    expect(
+      Bun.spawnSync(["git", "config", "core.fsmonitor", fsmonitor], { cwd: directory }).success,
+    ).toBeTrue();
     const registry = new ProjectRegistry([fixtureProject(directory)]);
 
     const first = registry.git("fixture");
     const second = registry.git("fixture");
 
     expect(first).toBe(second);
-    expect(await first).toMatchObject({ staged: 1, modified: 0, untracked: 1, clean: false });
+    expect(await first).toMatchObject({
+      available: true,
+      staged: 1,
+      modified: 0,
+      untracked: 1,
+      clean: false,
+    });
+    expect(existsSync(marker)).toBeFalse();
     expect((await registry.dto(registry.get("fixture"))).branch).toBeString();
+  });
+
+  test("distinguishes unavailable Git status from a verified clean worktree", async () => {
+    const directory = root("not-git");
+    const registry = new ProjectRegistry([fixtureProject(directory)]);
+
+    expect(await registry.git("fixture")).toEqual({
+      available: false,
+      branch: null,
+      upstream: null,
+      ahead: 0,
+      behind: 0,
+      staged: 0,
+      modified: 0,
+      untracked: 0,
+      clean: false,
+    });
   });
 
   test("tree skips generated directories without truncating later siblings", async () => {

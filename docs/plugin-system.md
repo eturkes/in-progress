@@ -256,6 +256,7 @@ Permission: `project.git`. No parameters. Returns a three-second bounded `git st
 
 ```ts
 {
+  available: boolean;
   branch: string | null;
   upstream: string | null;
   ahead: number;
@@ -266,6 +267,9 @@ Permission: `project.git`. No parameters. Returns a three-second bounded `git st
   clean: boolean;
 }
 ```
+
+`available: false` means Git could not return a verified bounded status; counters are zero and
+`clean` remains false rather than claiming a clean worktree.
 
 ### `host.notify`
 
@@ -282,11 +286,110 @@ Permission: `host.notify`.
 
 The host overwrites `projectId` with the bound project, stores the event, updates foreground clients, and sends Web Push. Notification text leaves the machine as an encrypted Web Push payload and may appear on a lock screen; combining this capability with a read capability can disclose returned content. Keep repository secrets out.
 
+### `align.status`
+
+Permission: `align.status`. Requires the trusted host-side Align integration. No parameters. The
+host runs one fixed, read-only `align status --format json` command against the frame-bound project,
+using isolated Python and a fixed trusted Align source. It validates schema v1, removes
+history/source payloads and canonical host paths, then returns:
+
+```ts
+{
+  initialized: boolean;
+  contract: {
+    state: "missing" | "ambiguous" | "provisional" | "accepted";
+    id: string | null;
+  };
+  latest: {
+    stage: "pre_task" | "in_progress" | "candidate_final" | "released" | null;
+    assessmentCount: number;
+    reportCount: number;
+  };
+  totals: {
+    amendments: number; assessments: number; checkpoints: number;
+    contracts: number; reports: number; snapshots: number;
+  };
+  nextAction: { command: string; reason: string } | null;
+}
+```
+
+The plugin cannot select a root, executable, argument, model, or mutating Align command. Exact
+prompts, clauses, evidence, assessments, history, and reports remain outside this capability.
+
+### `drift.render`
+
+Permission: `drift.render`. Requires the trusted host-side Drift integration.
+
+```ts
+{
+  path: string;
+} // project-relative `.json` report path
+```
+
+The host canonicalizes one regular file inside the frame-bound project, invokes the configured
+binary with fixed `drift render <canonical-file>` arguments, and returns at most 1 MiB only after
+Drift exits successfully and therefore revalidates the self-contained report:
+
+```ts
+{
+  path: string;
+  text: string;
+}
+```
+
+Plugins usually combine this with `project.tree` to discover candidate reports. They cannot pass
+raw CLI arguments, traces, model options, or paths outside the selected project.
+
+### `tree-complete.workspace`
+
+Permission: `tree-complete.workspace`. Requires the trusted host-side Tree Complete integration.
+No parameters. Returns Tree Complete's public workspace document for the frame-bound project. The
+host loads the separately built embedded service once per configured project, fixes its target and
+private data directory, validates/bounds the JSON response, and removes canonical project,
+integration, and data paths.
+
+### `tree-complete.createFork`
+
+Permission: `tree-complete.createFork`. Requires an explicit user action in the plugin UI.
+
+```ts
+{
+  baseVersionId: string;
+  decisionId: string;
+  alternativeId: string;
+}
+```
+
+The host forwards only those three bounded IDs to the project-bound embedded service. `preview`
+mode reads repository identity/branch/HEAD, keeps separate host-owned simulation state per project,
+and produces a simulated child lineage without changing project files or Git state. `codex` mode
+requires a valid committed `.tree-complete/project.json`, may create a Git branch/worktree, change
+files, and commit, and runs inherited `codex --yolo exec` unsandboxed as the current OS user. Enable
+it only for trusted same-user repositories after reviewing Tree Complete's worktree/agent boundary.
+The plugin cannot select the repository, data path, runner mode, executable, prompt, branch name, or
+raw command.
+
+Tree Complete and the host share a 4 MiB compact-JSON response contract. Before reservation, the
+service projects the candidate plus every active run at their largest permitted terminal state;
+`429 workspace_history_limit_reached` therefore preserves the existing readable history instead
+of accepting a fork whose eventual response would exceed the host boundary.
+
+Manifest installation is not sufficient consent for this mutation. Before every request, the
+trusted React host first validates the parameter object, then displays its own confirmation naming
+the plugin/project display names plus stable IDs, configured mode, and escaped immutable fork IDs. Preview wording
+discloses host-state simulation; Codex wording discloses unsandboxed OS-user authority. Rejection or
+invalid input returns an RPC error without contacting the embedded service; sandboxed plugin code
+cannot bypass that host-owned gate. Shutdown drains accepted work; a valid Codex run can hold close
+until its 30-minute runner timeout.
+
 ## Compatibility rules
 
 - Host and plugin must agree on API `1.0`; fail closed otherwise.
-- Additive optional context/status fields may appear within v1; ignore unknown non-security data.
+- Additive optional init-context/status fields may appear within v1; ignore unknown non-security
+  data there. Native-adapter RPC results use exact host schemas and require a coordinated rebuild.
 - Capability names and method semantics remain stable for the v1 lifetime.
 - New authority always requires a new manifest capability and host enforcement.
 - A plugin never receives an arbitrary filesystem root, terminal object, auth credential, CSRF token, or raw network primitive.
 - Backend/process plugins are outside v1. Add them only with a separate OS sandbox and protocol design.
+- Native integrations are host-owned fixed adapters configured separately from manifests; a plugin
+  capability never grants generic process execution.

@@ -10,6 +10,7 @@ import {
   type PluginRpcRequest,
 } from "../shared/contracts";
 import { NotificationService } from "./notifications";
+import { IntegrationRegistry } from "./integrations";
 import { ProjectRegistry } from "./projects";
 import { HttpError } from "./security";
 
@@ -66,6 +67,9 @@ export class PluginRegistry {
       }
       if (!within(root, asset) || !statSync(asset).isFile()) {
         throw new Error(`Plugin ${manifest.id} asset escapes its root or is not a file`);
+      }
+      if (asset === entry) {
+        throw new Error(`Plugin ${manifest.id} entry document must not also be a public asset`);
       }
       assets.set(assetPath, asset);
     }
@@ -134,6 +138,7 @@ export class PluginRegistry {
     request: PluginRpcRequest,
     projects: ProjectRegistry,
     notifications: NotificationService,
+    integrations: IntegrationRegistry,
   ): Promise<unknown> {
     this.assertCapability(pluginId, request.method);
     switch (request.method) {
@@ -152,6 +157,11 @@ export class PluginRegistry {
         });
         return notifications.create(input);
       }
+      case "align.status":
+      case "drift.render":
+      case "tree-complete.workspace":
+      case "tree-complete.createFork":
+        return integrations.dispatch(projectId, request.method, request.params);
     }
   }
 }

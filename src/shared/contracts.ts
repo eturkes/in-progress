@@ -17,6 +17,10 @@ export const PluginCapabilitySchema = z.enum([
   "project.readText",
   "project.git",
   "host.notify",
+  "align.status",
+  "drift.render",
+  "tree-complete.workspace",
+  "tree-complete.createFork",
 ]);
 
 export type PluginCapability = z.infer<typeof PluginCapabilitySchema>;
@@ -48,7 +52,16 @@ export const PluginManifestSchema = z
       .default([])
       .refine((values) => new Set(values).size === values.length, "Capabilities must be unique"),
   })
-  .strict();
+  .strict()
+  .superRefine((manifest, context) => {
+    if (manifest.assets.includes(manifest.entry)) {
+      context.addIssue({
+        code: "custom",
+        message: "Entry document must not also be a public asset",
+        path: ["assets"],
+      });
+    }
+  });
 
 export type PluginManifest = z.infer<typeof PluginManifestSchema>;
 
@@ -102,12 +115,25 @@ export interface BootstrapDto {
   identity: string;
   projects: ProjectDto[];
   plugins: PluginDto[];
+  authority: {
+    treeCompleteMode: "preview" | "codex" | null;
+  };
   notification: {
     available: boolean;
     publicKey: string;
     subscriptionCount: number;
   };
 }
+
+export const TreeForkRequestSchema = z
+  .object({
+    baseVersionId: z.string().min(1).max(200),
+    decisionId: z.string().min(1).max(200),
+    alternativeId: z.string().min(1).max(200),
+  })
+  .strict();
+
+export type TreeForkRequest = z.infer<typeof TreeForkRequestSchema>;
 
 export const PluginRpcRequestSchema = z
   .object({
@@ -117,6 +143,10 @@ export const PluginRpcRequestSchema = z
       "project.readText",
       "project.git",
       "host.notify",
+      "align.status",
+      "drift.render",
+      "tree-complete.workspace",
+      "tree-complete.createFork",
     ]),
     params: z.unknown().optional(),
   })
@@ -160,6 +190,7 @@ export interface ProjectTreeEntry {
 }
 
 export interface GitSummary {
+  available: boolean;
   branch: string | null;
   upstream: string | null;
   ahead: number;
@@ -168,4 +199,34 @@ export interface GitSummary {
   modified: number;
   untracked: number;
   clean: boolean;
+}
+
+export interface AlignStatus {
+  initialized: boolean;
+  contract: {
+    state: "missing" | "ambiguous" | "provisional" | "accepted";
+    id: string | null;
+  };
+  latest: {
+    stage: "pre_task" | "in_progress" | "candidate_final" | "released" | null;
+    assessmentCount: number;
+    reportCount: number;
+  };
+  totals: {
+    amendments: number;
+    assessments: number;
+    checkpoints: number;
+    contracts: number;
+    reports: number;
+    snapshots: number;
+  };
+  nextAction: {
+    command: string;
+    reason: string;
+  } | null;
+}
+
+export interface DriftRender {
+  path: string;
+  text: string;
 }

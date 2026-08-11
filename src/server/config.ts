@@ -1,7 +1,8 @@
-import { existsSync, realpathSync, statSync } from "node:fs";
+import { accessSync, constants, existsSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { z } from "zod";
+import { loadTreeCompleteModule } from "./tree-complete";
 
 const ColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
@@ -30,6 +31,29 @@ const RawConfigSchema = z
       )
       .min(1),
     pluginDirectories: z.array(z.string()).default([]),
+    integrations: z
+      .object({
+        align: z
+          .object({
+            sourceDirectory: z.string().min(1),
+            pythonExecutable: z.string().min(1).default("/usr/bin/python3"),
+          })
+          .strict()
+          .optional(),
+        drift: z
+          .object({ executable: z.string().min(1) })
+          .strict()
+          .optional(),
+        treeComplete: z
+          .object({
+            sourceDirectory: z.string().min(1),
+            mode: z.enum(["preview", "codex"]).default("preview"),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .default({}),
     terminal: z
       .object({
         shell: z.string().optional(),
@@ -76,6 +100,11 @@ export interface InProgressConfig {
   };
   projects: ProjectConfig[];
   pluginDirectories: string[];
+  integrations: {
+    align?: { sourceDirectory: string; pythonExecutable: string };
+    drift?: { executable: string };
+    treeComplete?: { sourceDirectory: string; mode: "preview" | "codex" };
+  };
   terminal: {
     shell: string;
     shellArgs: string[];
@@ -97,6 +126,25 @@ function resolveDirectory(base: string, rawPath: string, label: string): string 
   const canonical = realpathSync(absolute);
   if (!statSync(canonical).isDirectory())
     throw new Error(`${label} is not a directory: ${canonical}`);
+  return canonical;
+}
+
+function resolveFile(base: string, rawPath: string, label: string): string {
+  const expanded = expandHome(rawPath);
+  const absolute = isAbsolute(expanded) ? expanded : resolve(base, expanded);
+  if (!existsSync(absolute)) throw new Error(`${label} does not exist: ${absolute}`);
+  const canonical = realpathSync(absolute);
+  if (!statSync(canonical).isFile()) throw new Error(`${label} is not a file: ${canonical}`);
+  return canonical;
+}
+
+function resolveExecutable(base: string, rawPath: string, label: string): string {
+  const canonical = resolveFile(base, rawPath, label);
+  try {
+    accessSync(canonical, constants.X_OK);
+  } catch {
+    throw new Error(`${label} is not executable: ${canonical}`);
+  }
   return canonical;
 }
 
@@ -133,6 +181,34 @@ export async function loadConfig(
     };
   });
 
+  const treeCompleteSourceDirectory = parsed.integrations.treeComplete
+    ? resolveDirectory(
+        rootDir,
+        parsed.integrations.treeComplete.sourceDirectory,
+        "Tree Complete source directory",
+      )
+    : undefined;
+
+  if (parsed.integrations.treeComplete?.mode === "codex" && treeCompleteSourceDirectory) {
+    let preflightProjectManifest: (targetRepo: string) => Promise<void>;
+    try {
+      const module = await loadTreeCompleteModule(treeCompleteSourceDirectory);
+      if (typeof module.preflightProjectManifest !== "function") throw new Error();
+      preflightProjectManifest = module.preflightProjectManifest;
+    } catch {
+      throw new Error("Tree Complete codex mode requires a compatible built integration");
+    }
+    for (const project of projects) {
+      try {
+        await preflightProjectManifest(project.path);
+      } catch {
+        throw new Error(
+          `Tree Complete codex mode requires a valid committed project manifest: ${project.displayPath}/.tree-complete/project.json`,
+        );
+      }
+    }
+  }
+
   return {
     configPath: realpathSync(absoluteConfig),
     rootDir,
@@ -142,6 +218,43 @@ export async function loadConfig(
     pluginDirectories: parsed.pluginDirectories.map((path) =>
       resolveDirectory(rootDir, path, "Plugin directory"),
     ),
+    integrations: {
+      ...(parsed.integrations.align
+        ? {
+            align: {
+              sourceDirectory: resolveDirectory(
+                rootDir,
+                parsed.integrations.align.sourceDirectory,
+                "Align source directory",
+              ),
+              pythonExecutable: resolveExecutable(
+                rootDir,
+                parsed.integrations.align.pythonExecutable,
+                "Align Python executable",
+              ),
+            },
+          }
+        : {}),
+      ...(parsed.integrations.drift
+        ? {
+            drift: {
+              executable: resolveExecutable(
+                rootDir,
+                parsed.integrations.drift.executable,
+                "Drift executable",
+              ),
+            },
+          }
+        : {}),
+      ...(parsed.integrations.treeComplete
+        ? {
+            treeComplete: {
+              sourceDirectory: treeCompleteSourceDirectory!,
+              mode: parsed.integrations.treeComplete.mode,
+            },
+          }
+        : {}),
+    },
     terminal: {
       shell: parsed.terminal.shell ?? process.env.SHELL ?? "/bin/sh",
       shellArgs: parsed.terminal.shellArgs,
@@ -176,6 +289,7 @@ export function configForTests(
       },
     ],
     pluginDirectories: [],
+    integrations: {},
     terminal: {
       shell: "/bin/sh",
       shellArgs: [],

@@ -8,6 +8,7 @@ import {
   type ProjectDto,
 } from "../../shared/contracts";
 import type { ApiClient } from "../api";
+import { authorizePluginRequest } from "../plugin-authority";
 
 export interface PluginStatus {
   state: "idle" | "busy" | "attention" | "error";
@@ -19,6 +20,7 @@ interface PluginFrameProps {
   api: ApiClient;
   plugin: PluginDto;
   project: ProjectDto;
+  treeCompleteMode: "preview" | "codex" | null;
   onStatus: (status: PluginStatus) => void;
   onToast: (message: string, tone?: "neutral" | "danger") => void;
 }
@@ -43,7 +45,14 @@ function messageText(error: unknown): string {
   return error instanceof Error ? error.message : "Plugin RPC failed";
 }
 
-export function PluginFrame({ api, plugin, project, onStatus, onToast }: PluginFrameProps) {
+export function PluginFrame({
+  api,
+  plugin,
+  project,
+  treeCompleteMode,
+  onStatus,
+  onToast,
+}: PluginFrameProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const portRef = useRef<MessagePort | null>(null);
   const connectedRef = useRef(false);
@@ -131,9 +140,28 @@ export function PluginFrame({ api, plugin, project, onStatus, onToast }: PluginF
         });
         return;
       }
-      const request: PluginRpcRequest = { method: data.method };
-      if (data.params !== undefined) request.params = data.params;
       requestTimes.push(now);
+      const authority = authorizePluginRequest(
+        data.method,
+        data.params,
+        plugin.name,
+        plugin.id,
+        project.name,
+        project.id,
+        treeCompleteMode,
+        window.confirm.bind(window),
+      );
+      if (!authority.allowed) {
+        channel.port1.postMessage({
+          kind: "response",
+          id,
+          ok: false,
+          error: authority.error,
+        });
+        return;
+      }
+      const request: PluginRpcRequest = { method: data.method };
+      if (authority.params !== undefined) request.params = authority.params;
       inFlight.add(id);
       void api
         .pluginRpc(plugin.id, project.id, request)

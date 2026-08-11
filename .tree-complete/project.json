@@ -1,0 +1,262 @@
+{
+  "schemaVersion": 1,
+  "project": {
+    "id": "in-progress",
+    "name": "in-progress",
+    "description": "Local-first browser control plane for durable coding-agent terminals and project-bound views."
+  },
+  "decisions": [
+    {
+      "id": "plugin-authority",
+      "title": "Plugin authority",
+      "question": "How should external project views receive host data and authority?",
+      "rationale": "A view needs useful project context without inheriting cookies, DOM access, arbitrary network access, or a general host execution surface.",
+      "chosenAlternativeId": "opaque-capabilities",
+      "alternatives": [
+        {
+          "id": "opaque-capabilities",
+          "label": "Opaque capability frames",
+          "description": "Run static views in opaque-origin iframes and broker explicit project-bound methods over a MessagePort.",
+          "impact": "Strong browser isolation and auditable least authority, with a small versioned protocol.",
+          "signal": "recommended",
+          "brief": {
+            "objective": "Preserve opaque-origin static plugins with manifest-declared, project-bound MessagePort capabilities.",
+            "constraints": [
+              "Keep host cookies, DOM, storage, external network access, and generic process execution unavailable.",
+              "Require host-owned enforcement for every capability and privileged user confirmation."
+            ],
+            "acceptance": [
+              "A plugin can invoke only methods declared by its validated manifest for the selected host project.",
+              "Navigation or frame disposal permanently closes the channel, and direct host API access remains impossible."
+            ]
+          }
+        },
+        {
+          "id": "trusted-same-origin",
+          "label": "Trusted same-origin modules",
+          "description": "Load every installed view as a host-origin module with direct application APIs.",
+          "impact": "Simpler composition, but any plugin compromise becomes a full host and shell compromise.",
+          "signal": "balanced",
+          "brief": {
+            "objective": "Replace iframe plugins with reviewed same-origin modules and a typed host extension API.",
+            "constraints": [
+              "Make installation explicitly equivalent to trusting host code.",
+              "Preserve project scoping and navigation lifecycle semantics."
+            ],
+            "acceptance": [
+              "The extension API is typed, versioned, and rejects incompatible modules at startup.",
+              "Documentation and UI disclose that plugin code has host-page authority."
+            ]
+          }
+        },
+        {
+          "id": "isolated-daemons",
+          "label": "Per-plugin daemons",
+          "description": "Run each plugin behind a separate OS process and narrow authenticated protocol.",
+          "impact": "A stronger process boundary with materially greater packaging, supervision, and policy complexity.",
+          "signal": "experimental",
+          "brief": {
+            "objective": "Move plugin execution into separately supervised least-privilege services.",
+            "constraints": [
+              "Assign explicit filesystem, network, CPU, memory, and lifetime limits per service.",
+              "Retain the browser's opaque-origin presentation boundary."
+            ],
+            "acceptance": [
+              "Compromising one plugin service grants neither another plugin's data nor terminal authority.",
+              "Service authentication, restart, upgrade, and protocol compatibility have deterministic tests."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "terminal-lifecycle",
+      "title": "Terminal lifecycle",
+      "question": "Which component should own durable coding-agent shell sessions?",
+      "rationale": "The browser must detach and reconnect without interrupting work, while terminal input ownership, replay, and backpressure remain bounded.",
+      "chosenAlternativeId": "host-pty",
+      "alternatives": [
+        {
+          "id": "host-pty",
+          "label": "Host-owned Bun PTY",
+          "description": "Keep each PTY in the long-lived Bun process and reconnect browsers through one-use tickets.",
+          "impact": "Tight protocol control and minimal dependencies; sessions end when the host process ends.",
+          "signal": "recommended",
+          "brief": {
+            "objective": "Retain host-owned Bun PTYs with bounded replay, writer leases, backpressure, and session-bound WebSocket tickets.",
+            "constraints": [
+              "Keep terminal bytes out of durable storage.",
+              "Reject cross-origin upgrades and bound every input, output, replay, and queued buffer."
+            ],
+            "acceptance": [
+              "Browser disconnect and reconnect preserve a live process and bounded recent output.",
+              "A one-use ticket can attach only to its browser session, project, and PTY."
+            ]
+          }
+        },
+        {
+          "id": "tmux-supervisor",
+          "label": "tmux-backed sessions",
+          "description": "Delegate process persistence and replay to tmux, attaching the web terminal to named sessions.",
+          "impact": "Survives host restarts, but adds an external control plane and terminal-state translation.",
+          "signal": "balanced",
+          "brief": {
+            "objective": "Use project-scoped tmux sessions as the canonical durable process owner.",
+            "constraints": [
+              "Authenticate and validate every tmux target name.",
+              "Preserve single-writer browser leases and bounded web delivery."
+            ],
+            "acceptance": [
+              "A host restart reconnects to existing project sessions without duplicate processes.",
+              "Untrusted project strings cannot select or create a session outside their assigned namespace."
+            ]
+          }
+        },
+        {
+          "id": "systemd-scopes",
+          "label": "User-service sessions",
+          "description": "Launch each agent under a transient systemd user service with a separate PTY relay.",
+          "impact": "Explicit lifetime and resource controls, with significant relay and recovery machinery.",
+          "signal": "experimental",
+          "brief": {
+            "objective": "Move process ownership into transient systemd user units with inspectable resource policy.",
+            "constraints": [
+              "Keep the PTY relay authenticated and project-bound.",
+              "Define deterministic cleanup for exited, failed, and abandoned units."
+            ],
+            "acceptance": [
+              "Sessions survive host restarts and expose bounded CPU, memory, and lifetime policy.",
+              "Every unit and relay is reconciled after interrupted startup or shutdown."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "remote-boundary",
+      "title": "Remote boundary",
+      "question": "How should owner devices reach the workstation control plane?",
+      "rationale": "Remote terminal input equals the workstation user's shell authority, so reachability and identity must stay narrow and explicit.",
+      "chosenAlternativeId": "loopback-tailscale",
+      "alternatives": [
+        {
+          "id": "loopback-tailscale",
+          "label": "Loopback plus Tailscale Serve",
+          "description": "Bind only to loopback and use private Tailscale HTTPS plus owner identity headers.",
+          "impact": "Phone access with a small application perimeter, dependent on tailnet policy and device security.",
+          "signal": "recommended",
+          "brief": {
+            "objective": "Preserve loopback-only HTTP behind private Tailscale Serve HTTPS.",
+            "constraints": [
+              "Reject non-loopback binding by default and require exact allowed owner identities.",
+              "Never treat forwarded identity headers as trustworthy on a directly reachable backend."
+            ],
+            "acceptance": [
+              "Direct LAN/public peers cannot reach the service under supported configuration.",
+              "Proxy requests require HTTPS, forwarding evidence, and the same identity throughout the browser session."
+            ]
+          }
+        },
+        {
+          "id": "local-only",
+          "label": "Local browser only",
+          "description": "Remove remote access support and accept requests only from the workstation browser.",
+          "impact": "Smallest network perimeter, but no phone or off-workstation workflow.",
+          "signal": "balanced",
+          "brief": {
+            "objective": "Constrain the product to direct loopback browsers and remove proxy identity handling.",
+            "constraints": [
+              "Keep same-origin CSRF and WebSocket origin enforcement.",
+              "Remove remote-specific configuration and documentation."
+            ],
+            "acceptance": [
+              "Every accepted request resolves to a direct loopback authority without forwarding headers.",
+              "The UI and installation flow make remote access unsupported rather than merely undocumented."
+            ]
+          }
+        },
+        {
+          "id": "mtls-lan",
+          "label": "Mutual-TLS gateway",
+          "description": "Expose a private-network HTTPS gateway that authenticates owner-device client certificates.",
+          "impact": "Independent device identity with certificate issuance, rotation, revocation, and proxy hardening costs.",
+          "signal": "experimental",
+          "brief": {
+            "objective": "Replace Tailscale identity with a loopback backend behind an mTLS-authenticated private gateway.",
+            "constraints": [
+              "Pin the gateway-to-backend trust path and strip all caller-supplied identity headers.",
+              "Provide certificate rotation and immediate device revocation."
+            ],
+            "acceptance": [
+              "Requests without an allowed unexpired client certificate never reach the application.",
+              "Application sessions bind to a stable certificate identity and reject identity changes."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "native-integrations",
+      "title": "Native integration boundary",
+      "question": "How should plugins reach analyzers and tools that need filesystem or process authority?",
+      "rationale": "Manifest data capabilities alone cannot safely express native execution, while a generic backend would turn plugin input into workstation command authority.",
+      "chosenAlternativeId": "named-adapters",
+      "alternatives": [
+        {
+          "id": "named-adapters",
+          "label": "Host-owned named adapters",
+          "description": "Configure trusted native code separately and expose only fixed, typed operations.",
+          "impact": "Narrow auditable authority with one maintained adapter per integration.",
+          "signal": "recommended",
+          "brief": {
+            "objective": "Retain host-configured Align, Drift, and Tree Complete adapters with fixed executables, roots, modes, and schemas.",
+            "constraints": [
+              "Never accept executable, root, raw command, model, or runner mode from plugin RPC.",
+              "Bound process groups, deadlines, output, JSON shape, and returned host paths."
+            ],
+            "acceptance": [
+              "Every native operation maps one manifest capability to one fixed host implementation.",
+              "Malformed input, incompatible output, path escape, timeout, or unconfigured authority fails closed."
+            ]
+          }
+        },
+        {
+          "id": "generic-backend-rpc",
+          "label": "Generic plugin backend",
+          "description": "Let each plugin register an arbitrary host command and RPC surface in its manifest.",
+          "impact": "Fast extension development, but manifest installation becomes unconstrained same-user code execution.",
+          "signal": "balanced",
+          "brief": {
+            "objective": "Define a generic executable-backed plugin protocol with explicit installation-time trust.",
+            "constraints": [
+              "Treat every backend plugin as full workstation-user code authority.",
+              "Separate backend lifecycle, logs, upgrades, and failure isolation from the browser host."
+            ],
+            "acceptance": [
+              "Installation and UI clearly distinguish data-only plugins from full-authority backend plugins.",
+              "Backend crashes and malformed protocol messages cannot crash the control-plane process."
+            ]
+          }
+        },
+        {
+          "id": "external-services",
+          "label": "Independent tool services",
+          "description": "Require native tools to expose separately managed authenticated loopback services.",
+          "impact": "Clear ownership boundaries and independent upgrades, with more daemons and credentials.",
+          "signal": "experimental",
+          "brief": {
+            "objective": "Move every native integration behind an independently supervised local service protocol.",
+            "constraints": [
+              "Authenticate each host-to-service connection and pin project authority server-side.",
+              "Keep plugin code unable to connect to those services directly."
+            ],
+            "acceptance": [
+              "A service receives only the project and operation authority assigned by host configuration.",
+              "Connection loss, version mismatch, and service compromise have explicit bounded failure behavior."
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

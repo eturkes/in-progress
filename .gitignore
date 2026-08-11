@@ -6,6 +6,8 @@ coverage/
 *.log
 *.tsbuildinfo
 .DS_Store
+.tree-complete/*
+!.tree-complete/project.json
 
 # Local overrides; commit in-progress.config.json as the safe baseline.
 in-progress.config.local.json

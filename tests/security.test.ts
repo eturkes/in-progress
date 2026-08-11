@@ -141,9 +141,11 @@ describe("secureHeaders", () => {
     expect(pluginCsp).toContain("'unsafe-inline'");
     expect(pluginCsp).toContain(`connect-src ${pluginBase}`);
     expect(pluginCsp).not.toContain("script-src 'self'");
-    expect(plugin.headers.get("access-control-allow-origin")).toBe("*");
-    expect(plugin.headers.get("cross-origin-resource-policy")).toBe("cross-origin");
+    expect(plugin.headers.get("access-control-allow-origin")).toBeNull();
+    expect(plugin.headers.get("cross-origin-resource-policy")).toBeNull();
+    expect(plugin.headers.get("cache-control")).toBe("private, no-store");
     expect(pluginAsset.headers.get("access-control-allow-origin")).toBe("*");
+    expect(pluginAsset.headers.get("cross-origin-resource-policy")).toBe("cross-origin");
     expect(pluginAsset.headers.has("x-frame-options")).toBeFalse();
     expect(pluginAsset.headers.has("content-security-policy")).toBeFalse();
   });

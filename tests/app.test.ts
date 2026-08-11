@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { createControlPlane } from "../src/server/app";
 import { configForTests } from "../src/server/config";
-import { removeDirectory, tempDirectory } from "./helpers";
+import { removeDirectory, tempDirectory, writeJson } from "./helpers";
 
 let app: ReturnType<typeof createControlPlane>;
 let root: string;
@@ -12,6 +14,9 @@ let csrfToken: string;
 beforeAll(async () => {
   root = tempDirectory("app");
   const config = configForTests(root, {
+    integrations: {
+      treeComplete: { sourceDirectory: root, mode: "preview" },
+    },
     terminal: {
       shell: "/bin/sh",
       shellArgs: ["-c", "cat"],
@@ -51,11 +56,17 @@ describe("HTTP bootstrap and terminal authorization", () => {
       identity: string;
       projects: { id: string }[];
       plugins: { id: string; kind: string }[];
+      authority: { treeCompleteMode: string | null };
     };
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(body).toMatchObject({ apiVersion: 1, csrfToken, identity: "local" });
+    expect(body).toMatchObject({
+      apiVersion: 1,
+      csrfToken,
+      identity: "local",
+      authority: { treeCompleteMode: "preview" },
+    });
     expect(body.projects).toEqual([expect.objectContaining({ id: "fixture" })]);
     expect(body.plugins).toEqual([expect.objectContaining({ id: "terminal", kind: "host" })]);
   });
@@ -80,6 +91,52 @@ describe("HTTP bootstrap and terminal authorization", () => {
     const response = await fetch(`${origin}/api/events`);
     expect(response.status).toBe(401);
     expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  test("requires a live session for plugin documents while leaving declared module assets loadable", async () => {
+    const pluginFixture = tempDirectory("plugin-document-auth");
+    const pluginRoot = join(pluginFixture, "plugin");
+    mkdirSync(pluginRoot);
+    writeFileSync(join(pluginRoot, "index.html"), "<!doctype html><p>private dashboard</p>\n");
+    writeFileSync(join(pluginRoot, "app.js"), "export const ready = true;\n");
+    writeJson(join(pluginRoot, "in-progress.plugin.json"), {
+      apiVersion: "1.0",
+      id: "fixture-plugin",
+      name: "Fixture plugin",
+      version: "1.0.0",
+      description: "Session boundary fixture",
+      entry: "index.html",
+      assets: ["app.js"],
+      capabilities: [],
+    });
+    const guarded = createControlPlane(
+      configForTests(pluginFixture, { pluginDirectories: [pluginRoot] }),
+      { memoryStore: true, port: 0 },
+    );
+    const guardedOrigin = guarded.server.url.origin;
+    try {
+      const unauthenticated = await fetch(`${guardedOrigin}/plugins/fixture-plugin/`);
+      expect(unauthenticated.status).toBe(401);
+      expect(await unauthenticated.text()).not.toContain("private dashboard");
+
+      const bootstrap = await fetch(`${guardedOrigin}/api/bootstrap`);
+      const session = bootstrap.headers.get("set-cookie")!.split(";", 1)[0]!;
+      const document = await fetch(`${guardedOrigin}/plugins/fixture-plugin/`, {
+        headers: { cookie: session },
+      });
+      expect(document.status).toBe(200);
+      expect(await document.text()).toContain("private dashboard");
+      expect(document.headers.get("access-control-allow-origin")).toBeNull();
+      expect(document.headers.get("cache-control")).toBe("private, no-store");
+      expect(document.headers.get("content-security-policy")).toContain("sandbox allow-scripts");
+
+      const asset = await fetch(`${guardedOrigin}/plugins/fixture-plugin/app.js`);
+      expect(asset.status).toBe(200);
+      expect(asset.headers.get("access-control-allow-origin")).toBe("*");
+    } finally {
+      await guarded.close();
+      removeDirectory(pluginFixture);
+    }
   });
 
   test("bounds the shared agent notification hook", async () => {

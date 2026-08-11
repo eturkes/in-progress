@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://in-progress.local/schemas/in-progress-config.schema.json",
   "title": "in-progress configuration",
-  "description": "Static project, plugin, terminal, server, and notification configuration for in-progress.",
+  "description": "Static project, plugin, trusted integration, terminal, server, and notification configuration for in-progress.",
   "type": "object",
   "additionalProperties": false,
   "required": ["projects"],
@@ -61,6 +61,62 @@
       },
       "default": [],
       "description": "Plugin roots or directories whose immediate children are plugin roots."
+    },
+    "integrations": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "description": "Trusted host-side adapters for fixed native tools. Plugin manifests cannot configure executable authority.",
+      "properties": {
+        "align": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sourceDirectory"],
+          "properties": {
+            "sourceDirectory": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Align checkout containing src/align; relative paths resolve from this config file."
+            },
+            "pythonExecutable": {
+              "type": "string",
+              "minLength": 1,
+              "default": "/usr/bin/python3",
+              "description": "Existing Python executable used with an isolated -I -S bootstrap into the fixed Align source."
+            }
+          }
+        },
+        "drift": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["executable"],
+          "properties": {
+            "executable": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Existing Drift executable; relative paths resolve from this config file."
+            }
+          }
+        },
+        "treeComplete": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sourceDirectory"],
+          "properties": {
+            "sourceDirectory": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Tree Complete checkout with a built embedded service; relative paths resolve from this config file."
+            },
+            "mode": {
+              "type": "string",
+              "enum": ["preview", "codex"],
+              "default": "preview",
+              "description": "Preview writes host-owned simulation state without project/Git mutation; codex requires each project's committed .tree-complete/project.json, creates Git worktrees/branches, and runs unsandboxed Codex after explicit confirmation."
+            }
+          }
+        }
+      }
     },
     "terminal": {
       "type": "object",

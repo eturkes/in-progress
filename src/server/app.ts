@@ -9,6 +9,7 @@ import {
   type BootstrapDto,
 } from "../shared/contracts";
 import type { InProgressConfig } from "./config";
+import { IntegrationRegistry } from "./integrations";
 import { NotificationService } from "./notifications";
 import { PluginRegistry } from "./plugins";
 import { ProjectRegistry } from "./projects";
@@ -68,6 +69,7 @@ export function createControlPlane(config: InProgressConfig, options: AppOptions
   const store = new StateStore(config.dataDir, options.memoryStore);
   const notifications = new NotificationService(store, config.notifications.vapidSubject);
   const projects = new ProjectRegistry(config.projects);
+  const integrations = new IntegrationRegistry(config.integrations, projects, config.dataDir);
   const plugins = new PluginRegistry(config.pluginDirectories);
   const security = new SecurityGate(
     config.server.allowedOrigins,
@@ -128,6 +130,9 @@ export function createControlPlane(config: InProgressConfig, options: AppOptions
           identity: auth.identity,
           projects: await projects.dtos(),
           plugins: plugins.dtos(),
+          authority: {
+            treeCompleteMode: config.integrations.treeComplete?.mode ?? null,
+          },
           notification: {
             available: true,
             publicKey: notifications.publicKey,
@@ -234,6 +239,7 @@ export function createControlPlane(config: InProgressConfig, options: AppOptions
           rpc,
           projects,
           notifications,
+          integrations,
         );
         return api({ result });
       }
@@ -280,7 +286,9 @@ export function createControlPlane(config: InProgressConfig, options: AppOptions
 
       const pluginAsset = /^\/plugins\/([a-z][a-z0-9-]+)\/?(.*)$/.exec(pathname);
       if (pluginAsset && request.method === "GET") {
-        const asset = plugins.asset(pluginAsset[1]!, pluginAsset[2] ?? "");
+        const assetPath = pluginAsset[2] ?? "";
+        if (!assetPath) security.requireSession(request);
+        const asset = plugins.asset(pluginAsset[1]!, assetPath);
         const file = Bun.file(asset);
         const mime = file.type.split(";", 1)[0] ?? "";
         const document =
@@ -384,6 +392,7 @@ export function createControlPlane(config: InProgressConfig, options: AppOptions
 
   return {
     config,
+    integrations,
     notifications,
     plugins,
     projects,
@@ -393,9 +402,13 @@ export function createControlPlane(config: InProgressConfig, options: AppOptions
     terminals,
     async close(): Promise<void> {
       clearInterval(sweep);
-      terminals.close();
       await server.stop(true);
-      store.close();
+      terminals.close();
+      try {
+        await integrations.close();
+      } finally {
+        store.close();
+      }
     },
   };
 }

@@ -320,13 +320,13 @@
               <h1>${escapeHtml(project.name)}</h1>
               <p class="path">${escapeHtml(project.displayPath)}</p>
             </div>
-            <div class="branch"><span></span>${escapeHtml(git.branch || "not a git worktree")}</div>
+            <div class="branch"><span></span>${escapeHtml(git.available ? git.branch || "detached HEAD" : "Git status unavailable")}</div>
           </header>
           <section class="pulse" aria-label="Project summary">
             <article><strong>${directories}</strong><span>directories</span></article>
             <article><strong>${files}</strong><span>files mapped</span></article>
-            <article class="${changes ? "warm" : ""}"><strong>${changes}</strong><span>working changes</span></article>
-            <article><strong>${git.ahead}/${git.behind}</strong><span>ahead / behind</span></article>
+            <article class="${git.available && changes ? "warm" : ""}"><strong>${git.available ? changes : "—"}</strong><span>working changes</span></article>
+            <article><strong>${git.available ? `${git.ahead}/${git.behind}` : "—"}</strong><span>ahead / behind</span></article>
           </section>
           <section class="tree-panel">
             <div class="section-head"><h2>Structure</h2><span>${tree.length >= 800 ? "first 800 entries" : `${tree.length} entries`}</span></div>
@@ -336,8 +336,9 @@
           kind: "event",
           name: "status",
           payload: {
-            state: changes ? "attention" : "idle",
-            badge: changes ? String(changes) : null,
+            state: !git.available ? "error" : changes ? "attention" : "idle",
+            badge: git.available && changes ? String(changes) : null,
+            title: git.available ? null : "Git status unavailable",
           },
         });
       }

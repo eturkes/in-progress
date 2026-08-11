@@ -236,14 +236,11 @@ export function secureHeaders(
     headers.set("Content-Security-Policy", hostContentSecurityPolicy());
   } else if (kind === "plugin") {
     const assets = pluginAssetBase ?? "'none'";
-    // The opaque iframe origin requires CORS for same-host ES module assets.
-    headers.set("Access-Control-Allow-Origin", "*");
-    headers.set("Cross-Origin-Resource-Policy", "cross-origin");
     headers.set(
       "Content-Security-Policy",
       `default-src 'none'; script-src ${assets} 'unsafe-inline'; style-src ${assets} 'unsafe-inline'; img-src ${assets} data:; font-src ${assets}; connect-src ${assets}; worker-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox allow-scripts`,
     );
-    headers.set("Cache-Control", "no-cache");
+    headers.set("Cache-Control", "private, no-store");
   } else {
     headers.set("Access-Control-Allow-Origin", "*");
     headers.set("Cross-Origin-Resource-Policy", "cross-origin");

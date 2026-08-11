@@ -1,0 +1,41 @@
+{
+  "$schema": "./docs/in-progress-config.schema.json",
+  "server": {
+    "host": "127.0.0.1",
+    "port": 4317
+  },
+  "projects": [
+    {
+      "id": "in-progress",
+      "name": "in-progress",
+      "path": ".",
+      "color": "#67d5b5"
+    }
+  ],
+  "pluginDirectories": [
+    "../align/plugin",
+    "../drift/plugin",
+    "../preview/dist/in-progress-plugin",
+    "../tree-complete/dist/plugin",
+    "../turbo-prompt/dist"
+  ],
+  "integrations": {
+    "align": {
+      "sourceDirectory": "../align",
+      "pythonExecutable": "/usr/bin/python3"
+    },
+    "drift": {
+      "executable": "../drift/target/release/drift"
+    },
+    "treeComplete": {
+      "sourceDirectory": "../tree-complete",
+      "mode": "preview"
+    }
+  },
+  "terminal": {
+    "scrollbackBytes": 1048576
+  },
+  "notifications": {
+    "vapidSubject": "mailto:in-progress@localhost"
+  }
+}
