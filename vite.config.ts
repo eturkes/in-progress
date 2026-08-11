@@ -1,8 +1,9 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
+import { DEVELOPMENT_CSP_NONCE_PLACEHOLDER } from "./src/shared/development.ts";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [
     react(),
     VitePWA({
@@ -50,8 +51,12 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: true,
   },
+  html: command === "serve" ? { cspNonce: DEVELOPMENT_CSP_NONCE_PLACEHOLDER } : undefined,
   server: {
     host: "127.0.0.1",
     port: 5173,
+    ws: {
+      clientPort: 5173,
+    },
   },
-});
+}));

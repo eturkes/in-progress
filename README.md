@@ -35,6 +35,19 @@ Open `http://127.0.0.1:4317`. Copy `in-progress.config.json` to `in-progress.con
 IN_PROGRESS_CONFIG=./in-progress.config.local.json pnpm start
 ```
 
+### SSH development
+
+Run `pnpm dev` on the repository host. From the browser machine, forward both loopback ports through a second SSH connection:
+
+```sh
+ssh -NT -o ExitOnForwardFailure=yes \
+  -L 127.0.0.1:4317:127.0.0.1:4317 \
+  -L 127.0.0.1:5173:127.0.0.1:5173 \
+  -p <ssh-port> <ssh-host>
+```
+
+Open `http://127.0.0.1:4317`; port `5173` carries Vite HMR only. Both services remain remote-loopback-only.
+
 The [configuration schema](docs/in-progress-config.schema.json) documents every field. Paths are resolved relative to the config file and must already exist.
 
 ## Private phone access

@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { DEVELOPMENT_CSP_NONCE_PLACEHOLDER } from "../shared/development";
 
 const SESSION_COOKIE = "in-progress-session";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
@@ -20,6 +21,11 @@ export interface AuthContext {
 function randomToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   return Buffer.from(bytes).toString("base64url");
+}
+
+function randomNonce(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(18));
+  return Buffer.from(bytes).toString("base64");
 }
 
 function constantEqual(left: string, right: string): boolean {
@@ -200,6 +206,12 @@ export class HttpError extends Error {
   }
 }
 
+function hostContentSecurityPolicy(scriptNonce?: string, allowBlobWorkers = false): string {
+  const nonceSource = scriptNonce ? ` 'nonce-${scriptNonce}'` : "";
+  const blobWorkerSource = allowBlobWorkers ? " blob:" : "";
+  return `default-src 'self'; script-src 'self'${nonceSource}; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' ws: wss:; frame-src 'self'; worker-src 'self'${blobWorkerSource}; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`;
+}
+
 export function secureHeaders(
   response: Response,
   kind: "api" | "host" | "plugin" | "plugin-asset" = "api",
@@ -221,10 +233,7 @@ export function secureHeaders(
     headers.set("Cache-Control", "no-store");
   } else if (kind === "host") {
     headers.set("Cross-Origin-Opener-Policy", "same-origin");
-    headers.set(
-      "Content-Security-Policy",
-      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' ws: wss:; frame-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
-    );
+    headers.set("Content-Security-Policy", hostContentSecurityPolicy());
   } else if (kind === "plugin") {
     const assets = pluginAssetBase ?? "'none'";
     // The opaque iframe origin requires CORS for same-host ES module assets.
@@ -245,4 +254,26 @@ export function secureHeaders(
     status: response.status,
     statusText: response.statusText,
   });
+}
+
+export async function secureDevelopmentHost(response: Response): Promise<Response> {
+  const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+  if (contentType !== "text/html" || response.body === null) return secureHeaders(response, "host");
+
+  const nonce = randomNonce();
+  const html = (await response.text()).replaceAll(DEVELOPMENT_CSP_NONCE_PLACEHOLDER, nonce);
+  const headers = new Headers(response.headers);
+  headers.delete("content-encoding");
+  headers.delete("content-length");
+  headers.delete("etag");
+  const secured = secureHeaders(
+    new Response(html, {
+      headers,
+      status: response.status,
+      statusText: response.statusText,
+    }),
+    "host",
+  );
+  secured.headers.set("Content-Security-Policy", hostContentSecurityPolicy(nonce, true));
+  return secured;
 }

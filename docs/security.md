@@ -111,6 +111,8 @@ Any script executing in the trusted host page can observe keystrokes and control
 - relies on xterm.js rendering rather than inserting terminal content as HTML;
 - pins and audits xterm.js and addons.
 
+Development keeps the same host CSP boundary. Vite marks its injected React-refresh bootstrap with a placeholder nonce; the loopback backend replaces it with a fresh response nonce and permits `blob:` workers only for development HTML. Production permits neither exception.
+
 Terminal output may contain hostile ANSI/OSC sequences. OSC 777 notifications are an intentional control channel:
 
 ```text

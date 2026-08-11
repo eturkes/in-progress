@@ -1,6 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "lib": ["ES2024", "DOM", "DOM.Iterable", "WebWorker"],
     "module": "Preserve",

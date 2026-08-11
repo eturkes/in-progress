@@ -12,7 +12,13 @@ import type { InProgressConfig } from "./config";
 import { NotificationService } from "./notifications";
 import { PluginRegistry } from "./plugins";
 import { ProjectRegistry } from "./projects";
-import { HttpError, requestOrigin, SecurityGate, secureHeaders } from "./security";
+import {
+  HttpError,
+  requestOrigin,
+  SecurityGate,
+  secureDevelopmentHost,
+  secureHeaders,
+} from "./security";
 import { StateStore } from "./store";
 import { TerminalManager, type TerminalSocketData } from "./terminal";
 
@@ -312,7 +318,7 @@ export function createControlPlane(config: InProgressConfig, options: AppOptions
           headers,
           method: request.method,
         });
-        return secureHeaders(upstream, "host");
+        return await secureDevelopmentHost(upstream);
       }
 
       let decodedPath: string;

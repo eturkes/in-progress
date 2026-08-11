@@ -1,7 +1,30 @@
 import { describe, expect, test } from "bun:test";
 import { NotificationEventInputSchema, PluginManifestSchema } from "../src/shared/contracts";
+import { DEVELOPMENT_CSP_NONCE_PLACEHOLDER } from "../src/shared/development";
+import viteConfig from "../vite.config";
 
 describe("shared trust-boundary contracts", () => {
+  test("development HTML and HMR use the loopback proxy contract", async () => {
+    expect(typeof viteConfig).toBe("function");
+    if (typeof viteConfig !== "function") throw new Error("Vite config must resolve by command");
+    const development = await viteConfig({
+      command: "serve",
+      isPreview: false,
+      isSsrBuild: false,
+      mode: "development",
+    });
+    const production = await viteConfig({
+      command: "build",
+      isPreview: false,
+      isSsrBuild: false,
+      mode: "production",
+    });
+
+    expect(development.html?.cspNonce).toBe(DEVELOPMENT_CSP_NONCE_PLACEHOLDER);
+    expect(development.server?.ws).toMatchObject({ clientPort: 5173 });
+    expect(production.html).toBeUndefined();
+  });
+
   test("notification targets stay on the control-plane origin", () => {
     const input = { title: "Done", url: "/p/fixture/terminal" };
     expect(NotificationEventInputSchema.parse(input).url).toBe(input.url);

@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { requestOrigin, SecurityGate, secureHeaders } from "../src/server/security";
+import {
+  requestOrigin,
+  SecurityGate,
+  secureDevelopmentHost,
+  secureHeaders,
+} from "../src/server/security";
+import { DEVELOPMENT_CSP_NONCE_PLACEHOLDER } from "../src/shared/development";
 
 const ORIGIN = "http://127.0.0.1:4317";
 
@@ -140,5 +146,44 @@ describe("secureHeaders", () => {
     expect(pluginAsset.headers.get("access-control-allow-origin")).toBe("*");
     expect(pluginAsset.headers.has("x-frame-options")).toBeFalse();
     expect(pluginAsset.headers.has("content-security-policy")).toBeFalse();
+  });
+
+  test("replaces Vite's development nonce without weakening production CSP", async () => {
+    const source = `<meta property="csp-nonce" nonce="${DEVELOPMENT_CSP_NONCE_PLACEHOLDER}"><script nonce="${DEVELOPMENT_CSP_NONCE_PLACEHOLDER}">refresh()</script>`;
+    const development = await secureDevelopmentHost(
+      new Response(source, {
+        headers: {
+          "Content-Length": String(source.length),
+          "Content-Type": "text/html; charset=utf-8",
+          ETag: "stale-after-nonce-replacement",
+        },
+      }),
+    );
+    const html = await development.text();
+    const nonce = /<script nonce="([^"]+)">/.exec(html)?.[1];
+    const nextHtml = await (
+      await secureDevelopmentHost(
+        new Response(source, { headers: { "Content-Type": "text/html; charset=utf-8" } }),
+      )
+    ).text();
+    const nextNonce = /<script nonce="([^"]+)">/.exec(nextHtml)?.[1];
+    const developmentCsp = development.headers.get("content-security-policy")!;
+    const productionCsp = secureHeaders(new Response("host"), "host").headers.get(
+      "content-security-policy",
+    )!;
+
+    expect(nonce).toBeTruthy();
+    expect(nonce).not.toBe(DEVELOPMENT_CSP_NONCE_PLACEHOLDER);
+    expect(nextNonce).toBeTruthy();
+    expect(nextNonce).not.toBe(nonce);
+    expect(html).toContain(`<meta property="csp-nonce" nonce="${nonce}">`);
+    expect(developmentCsp).toContain(`script-src 'self' 'nonce-${nonce}'`);
+    expect(developmentCsp).toContain("worker-src 'self' blob:");
+    expect(development.headers.has("content-length")).toBeFalse();
+    expect(development.headers.has("etag")).toBeFalse();
+    expect(productionCsp).toContain("script-src 'self';");
+    expect(productionCsp).toContain("worker-src 'self';");
+    expect(productionCsp).not.toContain("nonce-");
+    expect(productionCsp).not.toContain("blob:");
   });
 });
