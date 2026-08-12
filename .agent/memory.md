@@ -12,3 +12,5 @@
   in-progress's strict project decision model. Codex startup preflights its exact raw committed
   `HEAD`; Tree's worst-case fork admission preserves all readable history below the shared 4 MiB
   response boundary and rejects before over-budget reservation.
+- Ecosystem `pluginDirectories` install built views; `projects` separately register every sibling
+  checkout as a terminal/Codex root. Product source + native gates remain owned by each sibling.

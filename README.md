@@ -108,7 +108,12 @@ The reference view lives at `examples/plugins/project-map`. See [plugin system](
 ### Sibling ecosystem
 
 `in-progress.ecosystem.config.json` wires the sibling checkouts under `~/Projects` into one local
-control plane. Build their installable outputs, then start with that configuration:
+control plane. Each checkout remains an independent product repository that owns its native gate and
+static plugin output. `pluginDirectories` installs those outputs; `projects` independently exposes
+the source checkouts in the project rail. Select the owning project before opening a terminal or
+starting Codex so its shell begins at that repository root.
+
+Build the installable outputs, then start with the ecosystem configuration:
 
 ```sh
 pnpm ecosystem:build

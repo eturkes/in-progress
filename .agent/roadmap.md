@@ -42,3 +42,12 @@ Browser + phone-ready personal agent control plane: durable project PTYs, projec
 - `tree-complete.createFork` always crosses a trusted host confirmation immediately before dispatch.
 - Default Tree Complete mode mutates only host-owned simulation state; project files/Git remain
   unchanged. Codex mode remains explicit configuration + requires a committed project manifest.
+
+## Next - evidence-led ecosystem use
+
+- [x] Register every sibling checkout as a project-rail terminal/Codex root while loading its built
+      plugin output independently.
+- [ ] Dogfood each view against real repository tasks; record observed friction before extending the
+      host or plugin protocol.
+- [ ] Keep API 1.0 stable; add host authority only for a bounded usage-backed operation that cannot
+      remain inside a static project view.

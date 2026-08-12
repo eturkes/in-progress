@@ -68,6 +68,30 @@ describe("shared trust-boundary contracts", () => {
     expect(source).toContain("TREE_COMPLETE_PUBLIC_RESPONSE_MAX_BYTES");
   });
 
+  test("ecosystem config exposes every sibling checkout as an editable project", async () => {
+    const config = await Bun.file(
+      new URL("../in-progress.ecosystem.config.json", import.meta.url),
+    ).json();
+    expect(config.projects).toEqual([
+      { id: "in-progress", name: "in-progress", path: ".", color: "#67d5b5" },
+      { id: "align", name: "Align", path: "../align", color: "#e8b55b" },
+      { id: "drift", name: "Drift", path: "../drift", color: "#62dfbc" },
+      { id: "preview", name: "Preview", path: "../preview", color: "#4c57a8" },
+      {
+        id: "tree-complete",
+        name: "Tree Complete",
+        path: "../tree-complete",
+        color: "#ccf45b",
+      },
+      {
+        id: "turbo-prompt",
+        name: "Turbo Prompt",
+        path: "../turbo-prompt",
+        color: "#315ed4",
+      },
+    ]);
+  });
+
   test("Tree Complete mutations require a trusted host confirmation", () => {
     const prompts: string[] = [];
     const confirm = (message: string) => {
