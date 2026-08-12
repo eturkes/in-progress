@@ -31,8 +31,8 @@ Browser + phone-ready personal agent control plane: durable project PTYs, projec
 - [x] Package Preview snapshots into one project-selecting static view
 - [x] Adapt Turbo Prompt to host-bound project analysis
 - [x] Expose Tree Complete as a project-bound embedded service + static client
-- [ ] Register local ecosystem config; run native + host + browser gates
-- [ ] Adversarial review, cleanup, scoped commits
+- [x] Register local ecosystem config; run native + host + browser gates
+- [x] Adversarial review, cleanup, scoped commits
 
 ### Integration invariants
 
