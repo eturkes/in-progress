@@ -1,0 +1,36 @@
+cluster-name = "in-progress-frontier"
+base-dir = ".data/frontier/restate"
+node-name = "frontier-local"
+bind-address = "127.0.0.1:5122"
+advertised-address = "http://127.0.0.1:5122/"
+listen-mode = "tcp"
+disable-telemetry = true
+default-num-partitions = 4
+rocksdb-total-memory-size = "256.0 MiB"
+default-journal-retention = "30d"
+default-idempotency-retention = "30d"
+default-workflow-completion-retention = "30d"
+
+[default-retry-policy]
+initial-interval = "500ms"
+exponentiation-factor = 2.0
+max-attempts = 70
+on-max-attempts = "pause"
+max-interval = "1m"
+
+[admin]
+bind-address = "127.0.0.1:9070"
+advertised-address = "http://127.0.0.1:9070/"
+disable-web-ui = false
+
+[admin.query-engine]
+memory-size = "128.0 MiB"
+
+[ingress]
+listen-mode = "unix"
+request-size-limit = "64.0 KiB"
+
+[worker.invoker]
+memory-limit = "256.0 MiB"
+per-invocation-memory-limit = "4.0 MiB"
+per-invocation-initial-memory = "32.0 KiB"

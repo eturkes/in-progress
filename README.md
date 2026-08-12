@@ -11,10 +11,12 @@ in-progress is a remote shell. It deliberately binds loopback and expects privat
 - TypeScript 7, pnpm `11.3.0`
 - External views: local static bundles in opaque-origin sandboxed iframes; versioned `MessageChannel` RPC
 - State: ignored `.data/in-progress.db`; no account, cloud database, or telemetry
+- Frontier lab: Kotlin/Restate durable workflows + Rust idempotent effect executor + Quint model
 
 ## Start
 
-Prerequisites: Bun 1.3.14+, Node 24+, pnpm 11.3.0+, and optionally Tailscale on the host and phone.
+Prerequisites: Bun 1.3.14+, Node 24+, pnpm 11.3.0+, JDK 26.0.2, Rust/Cargo 1.97.1,
+Linux x86-64, and optionally Tailscale on the host and phone. JDK/Rust are used by the frontier gate.
 
 ```sh
 pnpm install
@@ -148,6 +150,14 @@ Tree Complete pessimistically budgets every accepted fork's terminal public stat
 envelope under the host's 4 MiB limit. At the boundary it rejects before reservation with `429`,
 leaving the readable retained history unchanged.
 
+## Frontier durable execution lab
+
+`frontier/` is an isolated next-architecture slice; it does not replace the production Bun routes.
+It proves a Kotlin/Restate durable workflow calling a Rust operation executor with an immutable
+SQLite receipt. The full subprocess gate kills the Kotlin endpoint after executor commit, restarts
+it, and verifies Restate completion through receipt replay. See the [frontier design and exact
+guarantee](frontier/README.md).
+
 ## Commands
 
 | Command                          | Purpose                                      |
@@ -156,6 +166,7 @@ leaving the readable retained history unchanged.
 | `pnpm build`                     | SDK, PWA, and Bun server bundles             |
 | `pnpm start`                     | Run the production bundle                    |
 | `pnpm check`                     | Format, lint, types, tests, production build |
+| `pnpm check:frontier`            | Formal, Kotlin, Rust, and crash-replay gates |
 | `pnpm ecosystem:build`           | Build + validate five sibling plugin outputs |
 | `pnpm dev:ecosystem`             | Run dev host with the sibling ecosystem      |
 | `pnpm start:ecosystem`           | Run built host with the sibling ecosystem    |

@@ -14,3 +14,11 @@
   response boundary and rejects before over-budget reservation.
 - Ecosystem `pluginDirectories` install built views; `projects` separately register every sibling
   checkout as a terminal/Codex root. Product source + native gates remain owned by each sibling.
+- Frontier lab = isolated Kotlin/Restate workflow → Rust effect executor → SQLite immutable receipt,
+  modeled in Quint/TLC. Honest guarantee = one UUID/request-bound committed result, not one physical
+  attempt. Full gate crashes Kotlin after executor commit and requires replayed Restate completion.
+  Formal/Gradle tool state stays ignored under `.data/frontier`; production Bun routes are unchanged.
+- Self-hosted Restate raw HTTP ingress reflects browser origins and has no caller auth → frontier
+  ingress is Unix-only. Any future browser operation must cross the existing Bun auth/origin/CSRF gate.
+- Frontier first real migration target = read-only `align.status`. `slide-gen` stays a sibling until
+  deck/render operation identity + publication receipt semantics are specified.

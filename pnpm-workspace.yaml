@@ -1,6 +1,10 @@
 packages:
   - packages/*
+overrides:
+  "@informalsystems/quint>adm-zip": 0.6.0
 allowBuilds:
+  "@scarf/scarf": false
   bun: true
+  protobufjs: false
 minimumReleaseAgeExclude:
   - "@types/react@19.2.18"

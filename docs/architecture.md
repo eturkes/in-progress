@@ -16,6 +16,14 @@
 
 The Bun primitives remove native addons and extra daemons: `Bun.spawn` attaches a real PTY, `Bun.serve` owns HTTP/WebSocket lifecycle and limits, and `bun:sqlite` supplies a synchronous embedded database. Primary references: [PTY](https://bun.sh/docs/runtime/child-process#terminal-pty-support), [WebSockets](https://bun.sh/docs/runtime/http/websockets), [SQLite](https://bun.sh/docs/runtime/sqlite).
 
+## Frontier execution lab
+
+`frontier/` is a gated experiment, not a production request path. It partitions durable workflow
+policy into Kotlin/Restate, high-authority effect commit into a loopback Rust executor, and lifecycle
+safety into Quint/TLC. TypeScript/Bun continues to own the browser, plugins, API, and interactive
+PTYs. The first operation commits only a probe receipt; it establishes request binding, replay, and
+crash recovery without granting arbitrary process authority. [Frontier details](../frontier/README.md)
+
 ## Topology
 
 ```text

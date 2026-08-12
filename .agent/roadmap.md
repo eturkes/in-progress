@@ -51,3 +51,23 @@ Browser + phone-ready personal agent control plane: durable project PTYs, projec
       host or plugin protocol.
 - [ ] Keep API 1.0 stable; add host authority only for a bounded usage-backed operation that cannot
       remain inside a static project view.
+
+## Frontier durable execution
+
+- [x] Boundary allocation → TypeScript/Bun UI, Kotlin/Restate policy, Rust effects, Quint model
+- [x] Model commit ambiguity + retry exhaustion/pause/resume; gate with named traces/simulation/TLC
+- [x] Build UUID/request-bound Rust receipt ledger + strict loopback protocol
+- [x] Build Kotlin workflow + cross-language receipt validation
+- [x] Kill workflow endpoint after executor commit → restart/replay/attach full-chain proof
+- [x] Pin formal binaries, Gradle distribution/dependencies/artifacts, Cargo graph, Restate config
+- [ ] Migrate `align.status` as the first real fixed bounded operation; preserve plugin API
+- [ ] Define `slide-gen` deck/render operation identity + publication receipt before integration
+
+### Frontier invariants
+
+- One operation UUID permanently binds one canonical request; UUIDs are never reused.
+- One committed immutable result receipt; physical attempts may repeat and be discarded.
+- Ambiguous transport/process failure remains retryable; only validated stable rejection terminates.
+- Raw Restate invocation ingress = private Unix socket; browser traffic must cross Bun auth/origin/CSRF.
+- Restate completion retention = 30 days; executor receipt retention = indefinite.
+- Existing Bun production behavior remains unchanged until a real adapter passes equivalent gates.

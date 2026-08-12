@@ -3,6 +3,11 @@ dist/
 .data/
 .pnpm-store/
 coverage/
+_apalache-out/
+frontier/orchestrator/.gradle/
+frontier/orchestrator/.kotlin/
+frontier/orchestrator/build/
+frontier/executor/target/
 *.log
 *.tsbuildinfo
 .DS_Store
