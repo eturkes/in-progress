@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import {
   type ClipboardEvent as ReactClipboardEvent,
-  type CSSProperties,
   useCallback,
   useEffect,
   useMemo,
@@ -24,12 +23,14 @@ import type { ProjectDto, TerminalSessionDto } from "../../shared/contracts";
 import { TerminalWire, resizeFrame, wireFrame } from "../../shared/terminal-wire";
 import { moveRovingTab } from "../a11y";
 import { type ApiClient, websocketUrl } from "../api";
+import { type ResolvedTheme, THEME_DEFINITIONS } from "../theme";
 
 type ConnectionState = "connecting" | "connected" | "reconnecting" | "offline";
 
 interface TerminalPaneProps {
   api: ApiClient;
   project: ProjectDto;
+  theme: ResolvedTheme;
   onToast: (message: string, tone?: "neutral" | "danger") => void;
 }
 
@@ -76,7 +77,7 @@ function rememberScreenReaderMode(projectId: string, enabled: boolean): void {
   }
 }
 
-export function TerminalPane({ api, project, onToast }: TerminalPaneProps) {
+export function TerminalPane({ api, project, theme, onToast }: TerminalPaneProps) {
   const [sessions, setSessions] = useState<TerminalSessionDto[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -260,6 +261,7 @@ export function TerminalPane({ api, project, onToast }: TerminalPaneProps) {
             api={api}
             projectId={project.id}
             session={selected}
+            theme={theme}
             onSession={updateSession}
             onToast={onToast}
           />
@@ -305,6 +307,7 @@ interface TerminalConnectionProps {
   api: ApiClient;
   projectId: string;
   session: TerminalSessionDto;
+  theme: ResolvedTheme;
   onSession: (session: TerminalSessionDto) => void;
   onToast: (message: string, tone?: "neutral" | "danger") => void;
 }
@@ -320,6 +323,7 @@ function TerminalConnection({
   api,
   projectId,
   session,
+  theme,
   onSession,
   onToast,
 }: TerminalConnectionProps) {
@@ -329,6 +333,7 @@ function TerminalConnection({
   const reconnectTimerRef = useRef<number | null>(null);
   const modifiersRef = useRef({ ctrl: false, alt: false });
   const writableRef = useRef(false);
+  const initialThemeRef = useRef(THEME_DEFINITIONS[theme].terminal);
   const [connection, setConnection] = useState<ConnectionState>("connecting");
   const [writable, setWritable] = useState(false);
   const [screenReaderMode, setScreenReaderMode] = useState(() => storedScreenReaderMode(projectId));
@@ -386,29 +391,7 @@ function TerminalConnection({
       rightClickSelectsWord: true,
       screenReaderMode: initialScreenReaderModeRef.current,
       scrollback: 10_000,
-      theme: {
-        background: "#0b0e14",
-        foreground: "#dbe4ee",
-        cursor: "#67d5b5",
-        cursorAccent: "#0b0e14",
-        selectionBackground: "#315d56aa",
-        black: "#121722",
-        red: "#ff6b78",
-        green: "#67d5b5",
-        yellow: "#f2b84b",
-        blue: "#7aa2f7",
-        magenta: "#bb9af7",
-        cyan: "#58c7d6",
-        white: "#dbe4ee",
-        brightBlack: "#68758a",
-        brightRed: "#ff8993",
-        brightGreen: "#84e3c7",
-        brightYellow: "#ffd074",
-        brightBlue: "#9bb9ff",
-        brightMagenta: "#cfb4ff",
-        brightCyan: "#82dce7",
-        brightWhite: "#ffffff",
-      },
+      theme: initialThemeRef.current,
     });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
@@ -455,6 +438,10 @@ function TerminalConnection({
       terminalRef.current = null;
     };
   }, [send, sendInput]);
+
+  useEffect(() => {
+    if (terminalRef.current) terminalRef.current.options.theme = THEME_DEFINITIONS[theme].terminal;
+  }, [theme]);
 
   useEffect(() => {
     if (terminalRef.current) terminalRef.current.options.screenReaderMode = screenReaderMode;
@@ -675,7 +662,6 @@ function TerminalConnection({
       <div
         ref={hostRef}
         className="terminal-host"
-        style={{ "--terminal-accent": "#67d5b5" } as CSSProperties}
         onPasteCapture={onPasteCapture}
         aria-label={`${session.title} terminal output`}
       />

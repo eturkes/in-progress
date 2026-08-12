@@ -2,11 +2,13 @@ import "@fontsource-variable/atkinson-hyperlegible-next";
 import "@xterm/xterm/css/xterm.css";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { initializeTheme, ThemeProvider } from "./ThemeProvider";
 import "./fonts.css";
 import "./styles.css";
 
 const root = document.querySelector<HTMLDivElement>("#root");
 if (!root) throw new Error("in-progress root element is missing");
+initializeTheme();
 
 function syncVisualViewport(): void {
   const viewport = window.visualViewport;
@@ -23,4 +25,8 @@ function syncVisualViewport(): void {
 syncVisualViewport();
 window.visualViewport?.addEventListener("resize", syncVisualViewport);
 window.visualViewport?.addEventListener("scroll", syncVisualViewport);
-createRoot(root).render(<App />);
+createRoot(root).render(
+  <ThemeProvider>
+    <App />
+  </ThemeProvider>,
+);

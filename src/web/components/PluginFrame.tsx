@@ -9,6 +9,7 @@ import {
 } from "../../shared/contracts";
 import type { ApiClient } from "../api";
 import { authorizePluginRequest } from "../plugin-authority";
+import { type ResolvedTheme, pluginTheme } from "../theme";
 
 export interface PluginStatus {
   state: "idle" | "busy" | "attention" | "error";
@@ -20,6 +21,7 @@ interface PluginFrameProps {
   api: ApiClient;
   plugin: PluginDto;
   project: ProjectDto;
+  theme: ResolvedTheme;
   treeCompleteMode: "preview" | "codex" | null;
   onStatus: (status: PluginStatus) => void;
   onToast: (message: string, tone?: "neutral" | "danger") => void;
@@ -49,6 +51,7 @@ export function PluginFrame({
   api,
   plugin,
   project,
+  theme,
   treeCompleteMode,
   onStatus,
   onToast,
@@ -192,22 +195,7 @@ export function PluginFrame({
             color: project.color,
             available: project.available,
           },
-          theme: {
-            mode: "dark",
-            tokens: {
-              background: "#0b0e14",
-              surface: "#121722",
-              surfaceRaised: "#18202c",
-              border: "#283142",
-              text: "#e7ecf4",
-              muted: "#909cb0",
-              accent: "#67d5b5",
-              warning: "#f2b84b",
-              danger: "#ff6b78",
-              uiFont: "Atkinson Hyperlegible Next",
-              monoFont: "Iosevka",
-            },
-          },
+          theme: pluginTheme(theme),
         },
       },
       "*",

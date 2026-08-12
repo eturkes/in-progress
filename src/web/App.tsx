@@ -2,6 +2,8 @@ import {
   Bell,
   Blocks,
   ChartColumn,
+  Check,
+  ChevronDown,
   ChevronLeft,
   ChevronsLeft,
   ChevronsRight,
@@ -11,10 +13,13 @@ import {
   GitBranch,
   Globe,
   Menu,
+  Monitor,
+  Moon,
   RefreshCw,
   Search,
   Sparkles,
   SquareTerminal,
+  Sun,
   Wifi,
   WifiOff,
   X,
@@ -43,6 +48,8 @@ import { ApiClient, bootstrap } from "./api";
 import { NotificationCenter, useEventFeed } from "./components/Notifications";
 import { PluginFrame, type PluginStatus } from "./components/PluginFrame";
 import { confirmPreviewGeneration } from "./preview-authority";
+import { useTheme } from "./ThemeProvider";
+import type { ThemePreference } from "./theme";
 
 const TerminalPane = lazy(() =>
   import("./components/TerminalPane").then(({ TerminalPane: component }) => ({
@@ -166,6 +173,7 @@ export function App() {
 
 function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
   const api = useMemo(() => new ApiClient(bootstrapData.csrfToken), [bootstrapData.csrfToken]);
+  const { resolvedTheme } = useTheme();
   const [route, setRoute] = useState<RouteState>(readRoute);
   const [railCollapsed, setRailCollapsed] = useState(loadCollapsed);
   const [projectDrawer, setProjectDrawer] = useState(false);
@@ -707,6 +715,7 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
               <Command size={15} />
               <span>{shortcutModifier === "⌘" ? "⌘⇧P" : "Ctrl⇧P"}</span>
             </button>
+            <ThemePicker />
             <span
               className={`host-state ${hostConnected ? "is-online" : "is-offline"}`}
               title={
@@ -753,14 +762,21 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
                 </div>
               }
             >
-              <TerminalPane key={project.id} api={api} project={project} onToast={showToast} />
+              <TerminalPane
+                key={project.id}
+                api={api}
+                project={project}
+                theme={resolvedTheme}
+                onToast={showToast}
+              />
             </Suspense>
           ) : (
             <PluginFrame
-              key={`${project.id}:${plugin.id}:${previewFrameRevisions[project.id] ?? 0}`}
+              key={`${project.id}:${plugin.id}:${previewFrameRevisions[project.id] ?? 0}:${resolvedTheme}`}
               api={api}
               project={project}
               plugin={plugin}
+              theme={resolvedTheme}
               treeCompleteMode={bootstrapData.authority.treeCompleteMode}
               onStatus={setCurrentPluginStatus}
               onToast={showToast}
@@ -813,6 +829,101 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+const themeChoices: {
+  value: ThemePreference;
+  label: string;
+  description: string;
+  icon: Icon;
+}[] = [
+  { value: "auto", label: "Auto", description: "Match this device", icon: Monitor },
+  { value: "light", label: "Light", description: "Use the light palette", icon: Sun },
+  { value: "dark", label: "Dark", description: "Use the dark palette", icon: Moon },
+];
+
+function ThemePicker() {
+  const { preference, resolvedTheme, setPreference } = useTheme();
+  const [open, setOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const selected = themeChoices.find((choice) => choice.value === preference) ?? themeChoices[0]!;
+  const SelectedIcon = selected.icon;
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!pickerRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      buttonRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    window.addEventListener("keydown", closeOnEscape, true);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      window.removeEventListener("keydown", closeOnEscape, true);
+    };
+  }, [open]);
+
+  const choose = (next: ThemePreference) => {
+    setPreference(next);
+    setOpen(false);
+    window.setTimeout(() => buttonRef.current?.focus(), 0);
+  };
+
+  return (
+    <div className="theme-picker" ref={pickerRef}>
+      <button
+        ref={buttonRef}
+        type="button"
+        className="theme-button"
+        aria-label={`Theme: ${selected.label}${preference === "auto" ? `, currently ${resolvedTheme}` : ""}`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls="theme-menu"
+        title={`Theme: ${selected.label}`}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <SelectedIcon size={16} aria-hidden="true" />
+        <span>{selected.label}</span>
+        <ChevronDown size={13} aria-hidden="true" />
+      </button>
+      {open ? (
+        <section id="theme-menu" className="theme-menu" role="dialog" aria-label="Color theme">
+          <p>Appearance</p>
+          <div role="radiogroup" aria-label="Theme preference">
+            {themeChoices.map((choice) => {
+              const ChoiceIcon = choice.icon;
+              return (
+                <label className="theme-option" key={choice.value}>
+                  <input
+                    type="radio"
+                    name="theme-preference"
+                    value={choice.value}
+                    checked={preference === choice.value}
+                    onChange={() => choose(choice.value)}
+                  />
+                  <span className="theme-option-icon" aria-hidden="true">
+                    <ChoiceIcon size={17} />
+                  </span>
+                  <span className="theme-option-copy">
+                    <strong>{choice.label}</strong>
+                    <span>{choice.description}</span>
+                  </span>
+                  <span className="theme-option-check" aria-hidden="true">
+                    {preference === choice.value ? <Check size={15} /> : null}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
