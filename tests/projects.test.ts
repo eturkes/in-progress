@@ -67,10 +67,13 @@ describe("ProjectRegistry filesystem boundary", () => {
     });
   });
 
-  test("tree skips generated directories without truncating later siblings", async () => {
+  test("tree skips generated and nested-repository contents without truncating siblings", async () => {
     const directory = root("tree");
     mkdirSync(join(directory, ".git"));
     writeFileSync(join(directory, ".git", "secret"), "hidden");
+    mkdirSync(join(directory, "plugins", "nested"), { recursive: true });
+    writeFileSync(join(directory, "plugins", "nested", ".git"), "gitdir: elsewhere\n");
+    writeFileSync(join(directory, "plugins", "nested", "source.ts"), "hidden");
     mkdirSync(join(directory, "src"));
     writeFileSync(join(directory, "src", "main.ts"), "export {};\n");
     writeFileSync(join(directory, "README.md"), "visible\n");
@@ -80,7 +83,9 @@ describe("ProjectRegistry filesystem boundary", () => {
 
     expect(tree.map((entry) => entry.path)).toContain("README.md");
     expect(tree.map((entry) => entry.path)).toContain("src/main.ts");
+    expect(tree.map((entry) => entry.path)).toContain("plugins/nested");
     expect(tree.some((entry) => entry.path.startsWith(".git"))).toBeFalse();
+    expect(tree.map((entry) => entry.path)).not.toContain("plugins/nested/source.ts");
   });
 
   test("tree reports symlinks but never traverses them", async () => {

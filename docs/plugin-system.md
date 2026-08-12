@@ -230,7 +230,7 @@ Returns ordered entries:
 }[]
 ```
 
-Traversal does not descend into symlinks and excludes `.git`, `.data`, `node_modules`, `dist`, and `coverage`.
+Traversal does not descend into symlinks or nested Git repositories/worktrees and excludes `.git`, `.data`, `node_modules`, `dist`, and `coverage`.
 
 ### `project.readText`
 

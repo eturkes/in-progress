@@ -1,0 +1,15 @@
+[submodule "align"]
+	path = plugins/align
+	url = https://github.com/eturkes/align.git
+[submodule "drift"]
+	path = plugins/drift
+	url = https://github.com/eturkes/drift.git
+[submodule "preview"]
+	path = plugins/preview
+	url = https://github.com/eturkes/preview.git
+[submodule "tree-complete"]
+	path = plugins/tree-complete
+	url = https://github.com/eturkes/tree-complete.git
+[submodule "turbo-prompt"]
+	path = plugins/turbo-prompt
+	url = https://github.com/eturkes/turbo-prompt.git

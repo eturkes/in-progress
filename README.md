@@ -15,8 +15,9 @@ in-progress is a remote shell. It deliberately binds loopback and expects privat
 
 ## Start
 
-Prerequisites: Bun 1.3.14+, Node 24+, pnpm 11.3.0+, JDK 26.0.2, Rust/Cargo 1.97.1,
-Linux x86-64, and optionally Tailscale on the host and phone. JDK/Rust are used by the frontier gate.
+Prerequisites: Bun 1.3.14+, Node 24+, pnpm 11.3.0+, Python 3.11+, JDK 26.0.2,
+Rust/Cargo 1.97.1, Linux x86-64, and optionally Tailscale on the host and phone. Python/Rust build
+the plugin ecosystem; JDK/Rust are used by the frontier gate.
 
 ```sh
 pnpm install
@@ -107,17 +108,20 @@ Installation trusts a plugin with data returned by its declared capabilities. Th
 
 The reference view lives at `examples/plugins/project-map`. See [plugin system](docs/plugin-system.md) for the manifest, RPC protocol, SDK, and separate-repository workflow.
 
-### Sibling ecosystem
+### Pinned plugin ecosystem
 
-`in-progress.ecosystem.config.json` wires the sibling checkouts under `~/Projects` into one local
-control plane. Each checkout remains an independent product repository that owns its native gate and
-static plugin output. `pluginDirectories` installs those outputs; `projects` independently exposes
-the source checkouts in the project rail. Select the owning project before opening a terminal or
+`in-progress.ecosystem.config.json` wires the repositories pinned under `plugins/` into one local
+control plane. Each Git submodule remains an independent product repository that owns its native
+gate and static plugin output. `pluginDirectories` installs those outputs; `projects` independently
+exposes each submodule in the project rail. Select the owning project before opening a terminal or
 starting Codex so its shell begins at that repository root.
 
-Build the installable outputs, then start with the ecosystem configuration:
+Initialize the pinned revisions, build the installable outputs, then start with the ecosystem
+configuration. The build installs Tree Complete and Turbo Prompt from their locked dependency
+graphs before compiling all derived assets; Tree Complete uses its declared pnpm `10.34.5`.
 
 ```sh
+git submodule update --init --recursive
 pnpm ecosystem:build
 pnpm dev:ecosystem
 # production: pnpm build && pnpm start:ecosystem
@@ -132,10 +136,11 @@ pnpm dev:ecosystem
 | Turbo Prompt  | Builds prompts from host-bound metadata, tree, instructions, and manifests    | Bounded project reads                  |
 
 The build command compiles Drift, Preview, Tree Complete, and Turbo Prompt, then validates all five
-manifests with the host validator. Each sibling repository still owns its full native quality gate.
+manifests with the host validator. Each submodule still owns its full native quality gate.
 Preview packages only current-source published dashboards and includes a tracked `in-progress`
 dashboard; projects without a matching package display an explicit unavailable state. Generating a
 new dashboard remains a separate disclosure/token-spending action in the Preview checkout.
+Publish every referenced plugin commit before publishing a parent commit that advances a gitlink.
 
 Tree Complete preview state lives under host-owned `.data/` and does not mutate project files or Git
 state. `codex` mode is an explicit config change and requires each target to commit a valid
@@ -167,9 +172,9 @@ guarantee](frontier/README.md).
 | `pnpm start`                     | Run the production bundle                    |
 | `pnpm check`                     | Format, lint, types, tests, production build |
 | `pnpm check:frontier`            | Formal, Kotlin, Rust, and crash-replay gates |
-| `pnpm ecosystem:build`           | Build + validate five sibling plugin outputs |
-| `pnpm dev:ecosystem`             | Run dev host with the sibling ecosystem      |
-| `pnpm start:ecosystem`           | Run built host with the sibling ecosystem    |
+| `pnpm ecosystem:build`           | Build + validate five pinned plugin outputs  |
+| `pnpm dev:ecosystem`             | Run dev host with the pinned ecosystem       |
+| `pnpm start:ecosystem`           | Run built host with the pinned ecosystem     |
 | `pnpm plugin:validate -- <path>` | Validate a plugin root/manifest              |
 
 ## Documentation

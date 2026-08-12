@@ -45,8 +45,8 @@ Browser + phone-ready personal agent control plane: durable project PTYs, projec
 
 ## Next - evidence-led ecosystem use
 
-- [x] Register every sibling checkout as a project-rail terminal/Codex root while loading its built
-      plugin output independently.
+- [x] Pin every plugin repository as a submodule + register each as a project-rail terminal/Codex
+      root while loading its built output independently.
 - [ ] Dogfood each view against real repository tasks; record observed friction before extending the
       host or plugin protocol.
 - [ ] Keep API 1.0 stable; add host authority only for a bounded usage-backed operation that cannot

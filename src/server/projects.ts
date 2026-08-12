@@ -156,7 +156,12 @@ export class ProjectRegistry {
         const entry: ProjectTreeEntry = { path: childPath, name: child.name, kind, depth };
         if (kind === "file") entry.size = (await stat(fullPath)).size;
         entries.push(entry);
-        if (kind === "directory") await walk(fullPath, depth + 1);
+        if (kind === "directory") {
+          const nestedGit = await stat(resolve(fullPath, ".git"))
+            .then(() => true)
+            .catch(() => false);
+          if (!nestedGit) await walk(fullPath, depth + 1);
+        }
       }
     };
 

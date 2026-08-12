@@ -27,8 +27,8 @@
     "plugin:validate": "bun scripts/validate-plugin.ts",
     "start": "bun dist/server/index.js",
     "start:ecosystem": "IN_PROGRESS_CONFIG=./in-progress.ecosystem.config.json pnpm start",
-    "test": "bun test",
-    "test:watch": "bun test --watch",
+    "test": "bun test tests",
+    "test:watch": "bun test --watch tests",
     "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.web.json --noEmit && tsc -p packages/plugin-sdk/tsconfig.json --noEmit"
   },
   "dependencies": {

@@ -14,51 +14,51 @@
     {
       "id": "align",
       "name": "Align",
-      "path": "../align",
+      "path": "./plugins/align",
       "color": "#e8b55b"
     },
     {
       "id": "drift",
       "name": "Drift",
-      "path": "../drift",
+      "path": "./plugins/drift",
       "color": "#62dfbc"
     },
     {
       "id": "preview",
       "name": "Preview",
-      "path": "../preview",
+      "path": "./plugins/preview",
       "color": "#4c57a8"
     },
     {
       "id": "tree-complete",
       "name": "Tree Complete",
-      "path": "../tree-complete",
+      "path": "./plugins/tree-complete",
       "color": "#ccf45b"
     },
     {
       "id": "turbo-prompt",
       "name": "Turbo Prompt",
-      "path": "../turbo-prompt",
+      "path": "./plugins/turbo-prompt",
       "color": "#315ed4"
     }
   ],
   "pluginDirectories": [
-    "../align/plugin",
-    "../drift/plugin",
-    "../preview/dist/in-progress-plugin",
-    "../tree-complete/dist/plugin",
-    "../turbo-prompt/dist"
+    "./plugins/align/plugin",
+    "./plugins/drift/plugin",
+    "./plugins/preview/dist/in-progress-plugin",
+    "./plugins/tree-complete/dist/plugin",
+    "./plugins/turbo-prompt/dist"
   ],
   "integrations": {
     "align": {
-      "sourceDirectory": "../align",
+      "sourceDirectory": "./plugins/align",
       "pythonExecutable": "/usr/bin/python3"
     },
     "drift": {
-      "executable": "../drift/target/release/drift"
+      "executable": "./plugins/drift/target/release/drift"
     },
     "treeComplete": {
-      "sourceDirectory": "../tree-complete",
+      "sourceDirectory": "./plugins/tree-complete",
       "mode": "preview"
     }
   },

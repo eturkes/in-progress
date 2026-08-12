@@ -62,31 +62,33 @@ describe("shared trust-boundary contracts", () => {
 
   test("ecosystem build uses Preview's checkout-owned launcher", async () => {
     const source = await Bun.file(new URL("../scripts/build-ecosystem.ts", import.meta.url)).text();
-    expect(source).toContain('resolve(projectsRoot, "preview/bin/preview")');
+    expect(source).toContain('resolve(checkouts.preview, "bin/preview")');
     expect(source).not.toContain('"uv", "run"');
+    expect(source).toContain('...projectSources.flatMap(([id, path]) => ["--source", id, path])');
+    expect(source).toContain('Object.hasOwn(dashboards, "in-progress")');
     expect(source).toContain('"tree-complete.workspace"');
     expect(source).toContain("TREE_COMPLETE_PUBLIC_RESPONSE_MAX_BYTES");
   });
 
-  test("ecosystem config exposes every sibling checkout as an editable project", async () => {
+  test("ecosystem config exposes every plugin submodule as an editable project", async () => {
     const config = await Bun.file(
       new URL("../in-progress.ecosystem.config.json", import.meta.url),
     ).json();
     expect(config.projects).toEqual([
       { id: "in-progress", name: "in-progress", path: ".", color: "#67d5b5" },
-      { id: "align", name: "Align", path: "../align", color: "#e8b55b" },
-      { id: "drift", name: "Drift", path: "../drift", color: "#62dfbc" },
-      { id: "preview", name: "Preview", path: "../preview", color: "#4c57a8" },
+      { id: "align", name: "Align", path: "./plugins/align", color: "#e8b55b" },
+      { id: "drift", name: "Drift", path: "./plugins/drift", color: "#62dfbc" },
+      { id: "preview", name: "Preview", path: "./plugins/preview", color: "#4c57a8" },
       {
         id: "tree-complete",
         name: "Tree Complete",
-        path: "../tree-complete",
+        path: "./plugins/tree-complete",
         color: "#ccf45b",
       },
       {
         id: "turbo-prompt",
         name: "Turbo Prompt",
-        path: "../turbo-prompt",
+        path: "./plugins/turbo-prompt",
         color: "#315ed4",
       },
     ]);
