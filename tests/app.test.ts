@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createControlPlane } from "../src/server/app";
 import { configForTests } from "../src/server/config";
@@ -136,6 +136,99 @@ describe("HTTP bootstrap and terminal authorization", () => {
     } finally {
       await guarded.close();
       removeDirectory(pluginFixture);
+    }
+  });
+
+  test("binds Preview generation to the selected project and same-origin CSRF session", async () => {
+    const fixture = tempDirectory("preview-route");
+    const project = join(fixture, "project");
+    const source = join(fixture, "preview");
+    const artifacts = join(fixture, "artifacts");
+    const executable = join(source, "bin/preview");
+    const codex = join(fixture, "codex");
+    mkdirSync(project);
+    mkdirSync(join(source, "bin"), { recursive: true });
+    mkdirSync(artifacts);
+    writeFileSync(codex, "#!/bin/sh\nexit 0\n");
+    chmodSync(codex, 0o755);
+    writeFileSync(
+      executable,
+      [
+        "#!/bin/sh",
+        'if [ "$1" = plugin-build ]; then',
+        "  shift; artifact=",
+        '  while [ "$#" -gt 0 ]; do',
+        '    if [ "$1" = --artifact-root ]; then artifact=$2; shift 2; else shift; fi',
+        "  done",
+        '  mkdir -p "$artifact/in-progress-plugin"',
+        '  printf \'%s\\n\' \'{"schemaVersion":1,"projects":["fixture"]}\' > "$artifact/in-progress-plugin/preview-index.json"',
+        "fi",
+        "",
+      ].join("\n"),
+    );
+    chmodSync(executable, 0o755);
+    const guarded = createControlPlane(
+      configForTests(fixture, {
+        projects: [
+          {
+            id: "fixture",
+            name: "Fixture",
+            path: project,
+            displayPath: project,
+            color: "#67d5b5",
+          },
+        ],
+        integrations: {
+          preview: {
+            sourceDirectory: source,
+            executable,
+            artifactDirectory: artifacts,
+            codexExecutable: codex,
+          },
+        },
+      }),
+      { memoryStore: true, port: 0 },
+    );
+    const guardedOrigin = guarded.server.url.origin;
+    try {
+      const bootstrap = await fetch(`${guardedOrigin}/api/bootstrap`);
+      const body = (await bootstrap.json()) as { csrfToken: string };
+      const session = bootstrap.headers.get("set-cookie")!.split(";", 1)[0]!;
+      const headers = {
+        cookie: session,
+        origin: guardedOrigin,
+        "sec-fetch-site": "same-origin",
+        "x-in-progress-csrf": body.csrfToken,
+      };
+
+      const initial = await fetch(`${guardedOrigin}/api/projects/fixture/preview`, {
+        headers: { cookie: session },
+      });
+      expect(await initial.json()).toMatchObject({ status: { dashboard: false, state: "idle" } });
+      expect(
+        (await fetch(`${guardedOrigin}/api/projects/fixture/preview`, { method: "POST" })).status,
+      ).toBe(403);
+      const started = await fetch(`${guardedOrigin}/api/projects/fixture/preview`, {
+        headers,
+        method: "POST",
+      });
+      expect(started.status).toBe(202);
+      expect(await started.json()).toMatchObject({ status: { state: "generating" } });
+
+      let status: { dashboard: boolean; state: string } | null = null;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const response = await fetch(`${guardedOrigin}/api/projects/fixture/preview`, {
+          headers: { cookie: session },
+        });
+        status = ((await response.json()) as { status: { dashboard: boolean; state: string } })
+          .status;
+        if (status?.state !== "generating") break;
+        await Bun.sleep(10);
+      }
+      expect(status).toMatchObject({ dashboard: true, state: "idle" });
+    } finally {
+      await guarded.close();
+      removeDirectory(fixture);
     }
   });
 

@@ -24,3 +24,7 @@
   ingress is Unix-only. Any future browser operation must cross the existing Bun auth/origin/CSRF gate.
 - Frontier first real migration target = read-only `align.status`. `slide-gen` stays external until
   deck/render operation identity + publication receipt semantics are specified.
+- Preview authoring = trusted host Generate/Update action → fixed ChatGPT-authenticated
+  `gpt-5.6-sol`/`max` read-only Codex CLI. Models/bundles/stages/aggregate live at configured external
+  artifact root (`~/.local/share/in-progress/preview` in ecosystem config), required disjoint from
+  every project. Preview iframe remains capability-free; private aggregate index owns button state.

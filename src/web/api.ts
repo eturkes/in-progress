@@ -2,6 +2,7 @@ import type {
   BootstrapDto,
   EventDto,
   PluginRpcRequest,
+  PreviewStatus,
   TerminalSessionDto,
 } from "../shared/contracts";
 
@@ -110,6 +111,21 @@ export class ApiClient {
       request,
     );
     return body.result;
+  }
+
+  async previewStatus(projectId: string): Promise<PreviewStatus> {
+    const body = await this.#get<{ status: PreviewStatus }>(
+      `/api/projects/${encodeURIComponent(projectId)}/preview`,
+    );
+    return body.status;
+  }
+
+  async generatePreview(projectId: string): Promise<PreviewStatus> {
+    const body = await this.#mutation<{ status: PreviewStatus }>(
+      `/api/projects/${encodeURIComponent(projectId)}/preview`,
+      "POST",
+    );
+    return body.status;
   }
 
   async subscribe(subscription: PushSubscriptionJSON): Promise<number> {

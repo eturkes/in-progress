@@ -1,6 +1,6 @@
 import { accessSync, constants, existsSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { z } from "zod";
 import { loadTreeCompleteModule } from "./tree-complete";
 
@@ -42,6 +42,14 @@ const RawConfigSchema = z
           .optional(),
         drift: z
           .object({ executable: z.string().min(1) })
+          .strict()
+          .optional(),
+        preview: z
+          .object({
+            sourceDirectory: z.string().min(1),
+            artifactDirectory: z.string().min(1),
+            codexExecutable: z.string().min(1).default("/usr/bin/codex"),
+          })
           .strict()
           .optional(),
         treeComplete: z
@@ -103,6 +111,12 @@ export interface InProgressConfig {
   integrations: {
     align?: { sourceDirectory: string; pythonExecutable: string };
     drift?: { executable: string };
+    preview?: {
+      sourceDirectory: string;
+      executable: string;
+      artifactDirectory: string;
+      codexExecutable: string;
+    };
     treeComplete?: { sourceDirectory: string; mode: "preview" | "codex" };
   };
   terminal: {
@@ -152,6 +166,11 @@ function isLoopback(host: string): boolean {
   return host === "127.0.0.1" || host === "::1" || host === "localhost";
 }
 
+function within(root: string, candidate: string): boolean {
+  const path = relative(root, candidate);
+  return path === "" || (!path.startsWith(`..${sep}`) && path !== ".." && !path.startsWith(sep));
+}
+
 export async function loadConfig(
   configPath = process.env.IN_PROGRESS_CONFIG,
 ): Promise<InProgressConfig> {
@@ -188,6 +207,30 @@ export async function loadConfig(
         "Tree Complete source directory",
       )
     : undefined;
+  const previewSourceDirectory = parsed.integrations.preview
+    ? resolveDirectory(
+        rootDir,
+        parsed.integrations.preview.sourceDirectory,
+        "Preview source directory",
+      )
+    : undefined;
+  const previewArtifactDirectory = parsed.integrations.preview
+    ? resolveDirectory(
+        rootDir,
+        parsed.integrations.preview.artifactDirectory,
+        "Preview artifact directory",
+      )
+    : undefined;
+  if (
+    previewArtifactDirectory &&
+    projects.some(
+      (project) =>
+        within(project.path, previewArtifactDirectory) ||
+        within(previewArtifactDirectory, project.path),
+    )
+  ) {
+    throw new Error("Preview artifact directory must be separate from every project");
+  }
 
   if (parsed.integrations.treeComplete?.mode === "codex" && treeCompleteSourceDirectory) {
     let preflightProjectManifest: (targetRepo: string) => Promise<void>;
@@ -242,6 +285,24 @@ export async function loadConfig(
                 rootDir,
                 parsed.integrations.drift.executable,
                 "Drift executable",
+              ),
+            },
+          }
+        : {}),
+      ...(parsed.integrations.preview
+        ? {
+            preview: {
+              sourceDirectory: previewSourceDirectory!,
+              executable: resolveExecutable(
+                previewSourceDirectory!,
+                join(previewSourceDirectory!, "bin/preview"),
+                "Preview executable",
+              ),
+              artifactDirectory: previewArtifactDirectory!,
+              codexExecutable: resolveExecutable(
+                rootDir,
+                parsed.integrations.preview.codexExecutable,
+                "Codex executable",
               ),
             },
           }

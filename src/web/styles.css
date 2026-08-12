@@ -682,6 +682,36 @@ button:disabled {
   font-size: 10px;
 }
 
+.preview-button {
+  display: inline-flex;
+  min-width: max-content;
+  height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid #67d5b566;
+  border-radius: 7px;
+  color: #b8f3df;
+  background: #173229;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.preview-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: #e3fff5;
+  background: #1c4034;
+}
+
+.preview-button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.preview-button.is-busy svg {
+  animation: spin 900ms linear infinite;
+}
+
 .host-state {
   display: grid;
   width: 32px;
@@ -1947,6 +1977,11 @@ kbd {
   .host-state,
   .command-button {
     display: none;
+  }
+
+  .preview-button {
+    min-height: 44px;
+    padding: 0 10px;
   }
 
   .notification-button {

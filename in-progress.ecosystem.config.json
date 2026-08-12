@@ -45,7 +45,7 @@
   "pluginDirectories": [
     "./plugins/align/plugin",
     "./plugins/drift/plugin",
-    "./plugins/preview/dist/in-progress-plugin",
+    "~/.local/share/in-progress/preview/in-progress-plugin",
     "./plugins/tree-complete/dist/plugin",
     "./plugins/turbo-prompt/dist"
   ],
@@ -56,6 +56,11 @@
     },
     "drift": {
       "executable": "./plugins/drift/target/release/drift"
+    },
+    "preview": {
+      "sourceDirectory": "./plugins/preview",
+      "artifactDirectory": "~/.local/share/in-progress/preview",
+      "codexExecutable": "/usr/bin/codex"
     },
     "treeComplete": {
       "sourceDirectory": "./plugins/tree-complete",

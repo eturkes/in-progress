@@ -382,6 +382,22 @@ invalid input returns an RPC error without contacting the embedded service; sand
 cannot bypass that host-owned gate. Shutdown drains accepted work; a valid Codex run can hold close
 until its 30-minute runner timeout.
 
+### Host-owned Preview generation
+
+Preview's iframe manifest declares no capability. The sandboxed static runtime only selects a
+packaged dashboard matching its host-bound project ID. Trusted React host chrome owns the contextual
+**Generate Preview** / **Update Preview** button and calls fixed project routes directly; plugin code
+cannot originate, alter, or replay this authority through RPC.
+
+Immediately before POST, the host confirmation names the project, external destination,
+ChatGPT-subscription use, `gpt-5.6-sol`, `max`, the failed/invalid-output repair retry, and the
+host-readable-content disclosure. It also states that repository instructions/skills are suppressed
+while the user-owned global Codex instructions remain trusted authority. The request carries no body.
+The server fixes the canonical source and all argv, admits one aggregate-changing job globally, polls
+status, preserves the prior aggregate on failure, and remounts the no-store iframe only after successful
+atomic packaging. Dashboard state is derived from a private, strict, sorted aggregate index rather than
+untrusted iframe status text.
+
 ## Compatibility rules
 
 - Host and plugin must agree on API `1.0`; fail closed otherwise.

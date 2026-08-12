@@ -125,6 +125,20 @@ export interface BootstrapDto {
   };
 }
 
+export interface PreviewStatus {
+  projectId: string;
+  dashboard: boolean;
+  state: "idle" | "generating" | "error";
+  activeProjectId: string | null;
+  model: "gpt-5.6-sol";
+  reasoningEffort: "max";
+  artifactDirectory: string;
+  revision: number;
+  startedAt: string | null;
+  finishedAt: string | null;
+  error: string | null;
+}
+
 export const TreeForkRequestSchema = z
   .object({
     baseVersionId: z.string().min(1).max(200),

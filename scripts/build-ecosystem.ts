@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadConfig } from "../src/server/config";
@@ -26,6 +26,7 @@ const projectSources = [
   ["tree-complete", checkouts["tree-complete"]],
   ["turbo-prompt", checkouts["turbo-prompt"]],
 ] as const;
+const previewArtifacts = resolve(homedir(), ".local/share/in-progress/preview");
 const treePnpm = ["pnpm", "dlx", "pnpm@10.34.5"] as const;
 const treePnpmEnv = { npm_config_manage_package_manager_versions: "false" } as const;
 
@@ -57,6 +58,8 @@ const builds = [
     argv: [
       resolve(checkouts.preview, "bin/preview"),
       "plugin-build",
+      "--artifact-root",
+      previewArtifacts,
       ...projectSources.flatMap(([id, path]) => ["--source", id, path]),
     ],
     env: {},
@@ -78,7 +81,7 @@ const builds = [
 const pluginRoots = [
   resolve(checkouts.align, "plugin"),
   resolve(checkouts.drift, "plugin"),
-  resolve(checkouts.preview, "dist/in-progress-plugin"),
+  resolve(previewArtifacts, "in-progress-plugin"),
   resolve(checkouts["tree-complete"], "dist/plugin"),
   resolve(checkouts["turbo-prompt"], "dist"),
 ];
@@ -127,29 +130,23 @@ for (const root of pluginRoots) {
 
 const preview = plugins.find((plugin) => plugin.manifest.id === "preview");
 if (!preview) throw new Error("Preview plugin is missing");
-const previewEntry = await readFile(preview.entry, "utf8");
-const previewMarker = '<script id="preview-plugin-data" type="application/json">';
-const previewStart = previewEntry.indexOf(previewMarker);
-const previewEnd = previewEntry.indexOf("</script>", previewStart + previewMarker.length);
-if (previewStart < 0 || previewEnd < 0) {
-  throw new Error("Preview plugin dashboard data is missing");
-}
-let dashboards: unknown;
+let previewIndex: unknown;
 try {
-  dashboards = JSON.parse(
-    previewEntry.slice(previewStart + previewMarker.length, previewEnd),
+  previewIndex = JSON.parse(
+    await readFile(resolve(previewArtifacts, "in-progress-plugin/preview-index.json"), "utf8"),
   ) as unknown;
 } catch {
-  throw new Error("Preview plugin dashboard data is malformed");
+  throw new Error("Preview plugin index is malformed");
 }
 if (
-  typeof dashboards !== "object" ||
-  dashboards === null ||
-  !Object.hasOwn(dashboards, "in-progress")
+  typeof previewIndex !== "object" ||
+  previewIndex === null ||
+  (previewIndex as { schemaVersion?: unknown }).schemaVersion !== 1 ||
+  !Array.isArray((previewIndex as { projects?: unknown }).projects)
 ) {
-  throw new Error("Preview plugin omits the required in-progress dashboard");
+  throw new Error("Preview plugin index is incompatible");
 }
-console.log("✓ Preview dashboard: in-progress");
+console.log(`✓ Preview dashboards: ${(previewIndex as { projects: unknown[] }).projects.length}`);
 
 const config = await loadConfig(resolve(hostRoot, "in-progress.ecosystem.config.json"));
 console.log("✓ ecosystem config: canonical paths and executable authority");

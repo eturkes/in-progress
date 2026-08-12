@@ -12,6 +12,7 @@ import type { InProgressConfig } from "./config";
 import { IntegrationRegistry } from "./integrations";
 import { NotificationService } from "./notifications";
 import { PluginRegistry } from "./plugins";
+import { PreviewService } from "./preview";
 import { ProjectRegistry } from "./projects";
 import {
   HttpError,
@@ -69,6 +70,7 @@ export function createControlPlane(config: InProgressConfig, options: AppOptions
   const store = new StateStore(config.dataDir, options.memoryStore);
   const notifications = new NotificationService(store, config.notifications.vapidSubject);
   const projects = new ProjectRegistry(config.projects);
+  const preview = new PreviewService(config.integrations.preview, projects);
   const integrations = new IntegrationRegistry(config.integrations, projects, config.dataDir);
   const plugins = new PluginRegistry(config.pluginDirectories);
   const security = new SecurityGate(
@@ -207,6 +209,16 @@ export function createControlPlane(config: InProgressConfig, options: AppOptions
       if (sessionsRoute && request.method === "POST") {
         security.assertBrowserMutation(request);
         return api({ session: terminals.create(sessionsRoute[1]!) }, { status: 201 });
+      }
+
+      const previewRoute = /^\/api\/projects\/([a-z][a-z0-9-]+)\/preview$/.exec(pathname);
+      if (previewRoute && request.method === "GET") {
+        security.requireSession(request);
+        return api({ status: preview.status(previewRoute[1]!) });
+      }
+      if (previewRoute && request.method === "POST") {
+        security.assertBrowserMutation(request);
+        return api({ status: preview.start(previewRoute[1]!) }, { status: 202 });
       }
 
       const sessionRoute = /^\/api\/projects\/([a-z][a-z0-9-]+)\/sessions\/([0-9a-f-]+)$/.exec(
@@ -395,6 +407,7 @@ export function createControlPlane(config: InProgressConfig, options: AppOptions
     integrations,
     notifications,
     plugins,
+    preview,
     projects,
     security,
     server,
@@ -405,6 +418,7 @@ export function createControlPlane(config: InProgressConfig, options: AppOptions
       await server.stop(true);
       terminals.close();
       try {
+        await preview.close();
         await integrations.close();
       } finally {
         store.close();

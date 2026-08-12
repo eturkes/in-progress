@@ -11,6 +11,7 @@ import {
   GitBranch,
   Globe,
   Menu,
+  RefreshCw,
   Search,
   Sparkles,
   SquareTerminal,
@@ -30,11 +31,18 @@ import {
   useRef,
   useState,
 } from "react";
-import type { BootstrapDto, EventDto, PluginDto, ProjectDto } from "../shared/contracts";
+import type {
+  BootstrapDto,
+  EventDto,
+  PluginDto,
+  PreviewStatus,
+  ProjectDto,
+} from "../shared/contracts";
 import { moveRovingTab, trapTab } from "./a11y";
 import { ApiClient, bootstrap } from "./api";
 import { NotificationCenter, useEventFeed } from "./components/Notifications";
 import { PluginFrame, type PluginStatus } from "./components/PluginFrame";
+import { confirmPreviewGeneration } from "./preview-authority";
 
 const TerminalPane = lazy(() =>
   import("./components/TerminalPane").then(({ TerminalPane: component }) => ({
@@ -167,7 +175,13 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
   const [online, setOnline] = useState(navigator.onLine);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [pluginStatuses, setPluginStatuses] = useState<Record<string, PluginStatus>>({});
+  const [previewStatuses, setPreviewStatuses] = useState<Record<string, PreviewStatus>>({});
+  const [previewErrors, setPreviewErrors] = useState<Record<string, string>>({});
+  const [previewStarting, setPreviewStarting] = useState<string | null>(null);
+  const [previewFrameRevisions, setPreviewFrameRevisions] = useState<Record<string, number>>({});
   const toastCounter = useRef(0);
+  const previewSnapshots = useRef<Record<string, PreviewStatus>>({});
+  const previewRequestEpochs = useRef<Record<string, number>>({});
   const projectSearchRef = useRef<HTMLInputElement>(null);
   const projectOpenerRef = useRef<HTMLElement | null>(null);
   const drawerWasOpenRef = useRef(false);
@@ -361,6 +375,80 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
     },
     [plugin, project],
   );
+
+  useEffect(() => {
+    if (!project || plugin?.id !== "preview") return;
+    let active = true;
+    let loading = false;
+    const projectId = project.id;
+    const refresh = async () => {
+      if (loading) return;
+      loading = true;
+      const requestEpoch = previewRequestEpochs.current[projectId] ?? 0;
+      try {
+        const next = await api.previewStatus(projectId);
+        if (!active || requestEpoch !== (previewRequestEpochs.current[projectId] ?? 0)) return;
+        const prior = previewSnapshots.current[projectId];
+        previewSnapshots.current[projectId] = next;
+        setPreviewStatuses((current) => ({ ...current, [projectId]: next }));
+        setPreviewErrors((current) => {
+          if (!(projectId in current)) return current;
+          const updated = { ...current };
+          delete updated[projectId];
+          return updated;
+        });
+        setPreviewFrameRevisions((current) =>
+          current[projectId] === next.revision
+            ? current
+            : { ...current, [projectId]: next.revision },
+        );
+        if (prior?.state === "generating" && next.state === "idle") {
+          showToast(next.dashboard ? "Preview dashboard is ready" : "Preview generation finished");
+        } else if (prior?.state === "generating" && next.state === "error") {
+          showToast(next.error ?? "Preview generation failed", "danger");
+        }
+      } catch (statusError) {
+        if (active && requestEpoch === (previewRequestEpochs.current[projectId] ?? 0)) {
+          setPreviewErrors((current) => ({
+            ...current,
+            [projectId]: friendlyError(statusError),
+          }));
+        }
+      } finally {
+        loading = false;
+      }
+    };
+    void refresh();
+    const interval = window.setInterval(() => void refresh(), 1_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [api, plugin?.id, project, showToast]);
+
+  const runPreview = useCallback(async () => {
+    if (!project || plugin?.id !== "preview") return;
+    if (previewErrors[project.id]) return;
+    const status = previewStatuses[project.id];
+    if (!status) return;
+    if (!confirmPreviewGeneration(status, project, window.confirm.bind(window))) return;
+    previewRequestEpochs.current[project.id] = (previewRequestEpochs.current[project.id] ?? 0) + 1;
+    setPreviewStarting(project.id);
+    try {
+      const next = await api.generatePreview(project.id);
+      previewRequestEpochs.current[project.id] =
+        (previewRequestEpochs.current[project.id] ?? 0) + 1;
+      previewSnapshots.current[project.id] = next;
+      setPreviewStatuses((current) => ({ ...current, [project.id]: next }));
+      showToast(`${next.dashboard ? "Updating" : "Generating"} Preview dashboard`);
+    } catch (generationError) {
+      previewRequestEpochs.current[project.id] =
+        (previewRequestEpochs.current[project.id] ?? 0) + 1;
+      showToast(friendlyError(generationError), "danger");
+    } finally {
+      setPreviewStarting((current) => (current === project.id ? null : current));
+    }
+  }, [api, plugin?.id, previewErrors, previewStatuses, project, showToast]);
 
   useEffect(() => {
     document.title =
@@ -569,6 +657,42 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
             })}
           </div>
           <div className="host-actions">
+            {plugin.id === "preview" ? (
+              <button
+                type="button"
+                className={`preview-button ${previewStatuses[project.id]?.state === "generating" ? "is-busy" : ""}`}
+                disabled={
+                  !previewStatuses[project.id] ||
+                  Boolean(previewErrors[project.id]) ||
+                  previewStarting === project.id ||
+                  previewStatuses[project.id]?.activeProjectId !== null
+                }
+                onClick={() => void runPreview()}
+                title={
+                  previewErrors[project.id] ??
+                  previewStatuses[project.id]?.error ??
+                  "Generate or update this project's external Preview dashboard"
+                }
+              >
+                {previewStatuses[project.id]?.dashboard ? (
+                  <RefreshCw size={15} aria-hidden="true" />
+                ) : (
+                  <Sparkles size={15} aria-hidden="true" />
+                )}
+                <span>
+                  {previewErrors[project.id]
+                    ? "Preview unavailable"
+                    : previewStarting === project.id ||
+                        previewStatuses[project.id]?.state === "generating"
+                      ? "Generating…"
+                      : previewStatuses[project.id]?.activeProjectId
+                        ? "Preview busy"
+                        : previewStatuses[project.id]?.dashboard
+                          ? "Update Preview"
+                          : "Generate Preview"}
+                </span>
+              </button>
+            ) : null}
             <button
               type="button"
               className="command-button"
@@ -633,7 +757,7 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
             </Suspense>
           ) : (
             <PluginFrame
-              key={`${project.id}:${plugin.id}`}
+              key={`${project.id}:${plugin.id}:${previewFrameRevisions[project.id] ?? 0}`}
               api={api}
               project={project}
               plugin={plugin}

@@ -54,6 +54,7 @@ export async function runBounded(
     timeoutMs: number;
     stdoutBytes: number;
     label: string;
+    signal?: AbortSignal;
   },
 ): Promise<ProcessResult> {
   let child: ReturnType<typeof Bun.spawn>;
@@ -71,40 +72,70 @@ export async function runBounded(
   }
 
   let timedOut = false;
+  let externallyAborted = false;
   const streamAbort = new AbortController();
-  const stop = () => {
+  let forceTimer: ReturnType<typeof setTimeout> | undefined;
+  let stopping = false;
+  const signalGroup = (signal: NodeJS.Signals) => {
     try {
-      process.kill(-child.pid, "SIGKILL");
+      process.kill(-child.pid, signal);
     } catch {
       try {
-        child.kill("SIGKILL");
+        child.kill(signal);
       } catch {
         // Process already exited.
       }
     }
+  };
+  const hardStop = () => {
+    signalGroup("SIGKILL");
     streamAbort.abort();
+  };
+  const stop = () => {
+    if (stopping) return;
+    stopping = true;
+    signalGroup("SIGTERM");
+    streamAbort.abort();
+    forceTimer = setTimeout(hardStop, 8_000);
   };
   const timer = setTimeout(() => {
     timedOut = true;
     stop();
   }, options.timeoutMs);
+  const abort = () => {
+    externallyAborted = true;
+    stop();
+  };
+  options.signal?.addEventListener("abort", abort, { once: true });
+  if (options.signal?.aborted) abort();
   try {
     if (!(child.stdout instanceof ReadableStream) || !(child.stderr instanceof ReadableStream)) {
-      stop();
+      hardStop();
       throw new HttpError(502, `${options.label} process pipes were unavailable`);
     }
-    const [stdout, stderr, exitCode] = await Promise.all([
+    const [stdoutResult, stderrResult, exitResult] = await Promise.allSettled([
       readBounded(child.stdout, options.stdoutBytes, stop, options.label, streamAbort.signal),
       readBounded(child.stderr, 64 * 1024, stop, options.label, streamAbort.signal),
       child.exited,
     ]);
+    if (externallyAborted) throw new HttpError(503, `${options.label} canceled`);
     if (timedOut) throw new HttpError(504, `${options.label} timed out`);
+    if (stdoutResult.status === "rejected") throw stdoutResult.reason;
+    if (stderrResult.status === "rejected") throw stderrResult.reason;
+    if (exitResult.status === "rejected") {
+      throw new HttpError(502, `${options.label} process failed`);
+    }
+    const stdout = stdoutResult.value;
+    const stderr = stderrResult.value;
+    const exitCode = exitResult.value;
     if (exitCode !== 0) {
       throw new HttpError(422, `${options.label} rejected the project state`);
     }
     return { stdout, stderr };
   } finally {
     clearTimeout(timer);
-    stop();
+    if (forceTimer) clearTimeout(forceTimer);
+    options.signal?.removeEventListener("abort", abort);
+    hardStop();
   }
 }

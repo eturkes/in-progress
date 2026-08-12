@@ -98,6 +98,29 @@
             }
           }
         },
+        "preview": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sourceDirectory", "artifactDirectory"],
+          "properties": {
+            "sourceDirectory": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Preview checkout containing bin/preview; relative paths resolve from this config file."
+            },
+            "artifactDirectory": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Existing Preview state/output root, disjoint from every configured project."
+            },
+            "codexExecutable": {
+              "type": "string",
+              "minLength": 1,
+              "default": "/usr/bin/codex",
+              "description": "Authenticated Codex CLI. Preview requires stored ChatGPT login and strips API credential environment overrides."
+            }
+          }
+        },
         "treeComplete": {
           "type": "object",
           "additionalProperties": false,

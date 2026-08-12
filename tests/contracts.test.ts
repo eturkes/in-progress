@@ -64,10 +64,51 @@ describe("shared trust-boundary contracts", () => {
     const source = await Bun.file(new URL("../scripts/build-ecosystem.ts", import.meta.url)).text();
     expect(source).toContain('resolve(checkouts.preview, "bin/preview")');
     expect(source).not.toContain('"uv", "run"');
+    expect(source).toMatch(/"--artifact-root",\s+previewArtifacts/);
     expect(source).toContain('...projectSources.flatMap(([id, path]) => ["--source", id, path])');
-    expect(source).toContain('Object.hasOwn(dashboards, "in-progress")');
+    expect(source).toContain('"in-progress-plugin/preview-index.json"');
     expect(source).toContain('"tree-complete.workspace"');
     expect(source).toContain("TREE_COMPLETE_PUBLIC_RESPONSE_MAX_BYTES");
+  });
+
+  test("Preview generation confirmation discloses the fixed paid boundary", async () => {
+    const { confirmPreviewGeneration } = await import("../src/web/preview-authority");
+    const prompts: string[] = [];
+    const accepted = confirmPreviewGeneration(
+      {
+        projectId: "fixture",
+        dashboard: false,
+        state: "idle",
+        activeProjectId: null,
+        model: "gpt-5.6-sol",
+        reasoningEffort: "max",
+        artifactDirectory: "/external/preview",
+        revision: 0,
+        startedAt: null,
+        finishedAt: null,
+        error: null,
+      },
+      { id: "fixture", name: "Fixture" },
+      (message) => {
+        prompts.push(message);
+        return true;
+      },
+    );
+
+    expect(accepted).toBe(true);
+    expect(prompts[0]).toMatch(/Generate Preview.*Fixture.*Project ID: fixture/s);
+    expect(prompts[0]).toMatch(/gpt-5\.6-sol.*max/s);
+    expect(prompts[0]).toMatch(/ChatGPT subscription.*subscription usage/s);
+    expect(prompts[0]).toMatch(
+      /failed Codex invocation.*invalid\/unreadable.*two Codex invocations.*multiple model requests/s,
+    );
+    expect(prompts[0]).toMatch(
+      /any host-readable content.*OpenAI.*not a confidentiality boundary.*trust the source checkout/s,
+    );
+    expect(prompts[0]).toMatch(
+      /Repository instructions and skills are suppressed.*global ~\/\.codex\/AGENTS\.md.*trusted authority/s,
+    );
+    expect(prompts[0]).toContain("/external/preview");
   });
 
   test("ecosystem config exposes every plugin submodule as an editable project", async () => {

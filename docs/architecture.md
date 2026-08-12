@@ -2,17 +2,17 @@
 
 ## Decisions
 
-| Concern         | Decision                                                                                           |
-| --------------- | -------------------------------------------------------------------------------------------------- |
-| Runtime         | Pinned Bun + TypeScript; one unprivileged process                                                  |
-| HTTP/realtime   | Native `Bun.serve` + native binary WebSockets/SSE                                                  |
-| Terminal        | `Bun.Terminal` PTY per session; xterm.js in the trusted host UI                                    |
-| UI              | React/Vite installable PWA; responsive project rail + plugin rail + view pane                      |
-| Persistence     | `bun:sqlite` in `.data/in-progress.db`; PTY processes remain in memory                             |
-| Remote boundary | Loopback HTTP behind private Tailscale Serve HTTPS                                                 |
-| Plugins         | Local static directories; forced opaque iframe origin; project-bound `MessageChannel` capabilities |
-| Integrations    | Optional host-owned fixed adapters for Align, Drift, and Tree Complete; no generic plugin backend  |
-| Notifications   | SQLite inbox + SSE foreground delivery + VAPID Web Push background delivery                        |
+| Concern         | Decision                                                                                            |
+| --------------- | --------------------------------------------------------------------------------------------------- |
+| Runtime         | Pinned Bun + TypeScript; one unprivileged process                                                   |
+| HTTP/realtime   | Native `Bun.serve` + native binary WebSockets/SSE                                                   |
+| Terminal        | `Bun.Terminal` PTY per session; xterm.js in the trusted host UI                                     |
+| UI              | React/Vite installable PWA; responsive project rail + plugin rail + view pane                       |
+| Persistence     | `bun:sqlite` in `.data/in-progress.db`; PTY processes remain in memory                              |
+| Remote boundary | Loopback HTTP behind private Tailscale Serve HTTPS                                                  |
+| Plugins         | Local static directories; forced opaque iframe origin; project-bound `MessageChannel` capabilities  |
+| Integrations    | Optional host-owned fixed adapters for Align, Drift, Preview, and Tree Complete; no generic backend |
+| Notifications   | SQLite inbox + SSE foreground delivery + VAPID Web Push background delivery                         |
 
 The Bun primitives remove native addons and extra daemons: `Bun.spawn` attaches a real PTY, `Bun.serve` owns HTTP/WebSocket lifecycle and limits, and `bun:sqlite` supplies a synchronous embedded database. Primary references: [PTY](https://bun.sh/docs/runtime/child-process#terminal-pty-support), [WebSockets](https://bun.sh/docs/runtime/http/websockets), [SQLite](https://bun.sh/docs/runtime/sqlite).
 
@@ -62,7 +62,8 @@ Development substitutes Vite at `IN_PROGRESS_WEB_PROXY=http://127.0.0.1:5173`; a
 5. reject duplicate project/plugin IDs;
 6. in Tree Complete Codex mode, load the canonical built preflight and strictly validate each
    project's manifest from exact committed `HEAD`;
-7. place runtime state in `<config-root>/.data`.
+7. require Preview's canonical artifact root to be disjoint from every configured project;
+8. place runtime state in `<config-root>/.data`.
 
 The machine-readable contract is [in-progress-config.schema.json](in-progress-config.schema.json).
 
@@ -71,12 +72,14 @@ The machine-readable contract is [in-progress-config.schema.json](in-progress-co
 Project configuration is static for a server run. Each project record supplies the trusted canonical working directory used for sanitized read-only Git queries, plugin reads, and new shells.
 
 Integration configuration is also static and host-owned. Align gets one fixed read-only status
-invocation; Drift gets one fixed validating render invocation; Tree Complete loads one built
-embedded service per selected project with host-fixed project/data roots and runner mode. Static
-plugin manifests grant access to those named methods but cannot configure code, argv, paths, or
-mode. Align starts through isolated Python with a fixed trusted source path. Tree fork mutation
-additionally crosses a trusted React-host confirmation containing the configured mode and validated
-fork IDs.
+invocation; Drift gets one fixed validating render invocation; Preview gets one project-bound
+external generate/package operation; Tree Complete loads one built embedded service per selected
+project with host-fixed project/data roots and runner mode. Static plugin manifests grant access to
+named read methods but cannot configure code, argv, paths, models, or mode. Preview remains
+capability-free: trusted host chrome owns its button, disclosure confirmation, CSRF mutation, async
+job, and frame remount. Its CLI fixes ChatGPT auth, `gpt-5.6-sol`, `max`, a read-only OS sandbox, structured
+output validation, and atomic external publication. Tree fork mutation separately crosses a trusted
+confirmation containing configured mode and validated fork IDs.
 
 `POST /api/projects/:project/sessions` creates:
 
@@ -131,6 +134,8 @@ Core routes:
 | `POST /api/projects/:id/sessions`                 | create PTY                           |
 | `DELETE /api/projects/:id/sessions/:sid`          | terminate PTY                        |
 | `POST …/:sid/ticket`                              | mint one-use WebSocket ticket        |
+| `GET /api/projects/:id/preview`                   | external dashboard/job status        |
+| `POST /api/projects/:id/preview`                  | start fixed Preview generate/update  |
 | `GET /api/events`                                 | latest 100 inbox events              |
 | `GET /api/events/stream`                          | live SSE + 20-second heartbeat       |
 | `POST /api/events/:id/read`                       | mark event read                      |

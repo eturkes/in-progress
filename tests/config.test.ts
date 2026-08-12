@@ -40,11 +40,15 @@ describe("loadConfig", () => {
     const plugins = join(directory, "plugin-dist");
     const align = join(directory, "align");
     const treeComplete = join(directory, "tree-complete");
+    const preview = join(directory, "preview");
+    const previewArtifacts = join(directory, "preview-artifacts");
     const drift = join(directory, "drift");
     mkdirSync(project);
     mkdirSync(plugins);
     mkdirSync(align);
     mkdirSync(treeComplete);
+    mkdirSync(join(preview, "bin"), { recursive: true });
+    mkdirSync(previewArtifacts);
     writeTreeModule(
       treeComplete,
       "if (!targetRepo.endsWith('/workspace')) throw new Error('wrong project');",
@@ -53,6 +57,8 @@ describe("loadConfig", () => {
     writeFileSync(join(project, ".tree-complete/project.json"), "{}\n");
     writeFileSync(drift, "binary");
     chmodSync(drift, 0o755);
+    writeFileSync(join(preview, "bin/preview"), "#!/bin/sh\n");
+    chmodSync(join(preview, "bin/preview"), 0o755);
     symlinkSync("plugin-dist", join(directory, "plugins"));
     const configPath = join(directory, "in-progress.config.json");
     writeJson(configPath, {
@@ -61,6 +67,11 @@ describe("loadConfig", () => {
       integrations: {
         align: { sourceDirectory: "./align", pythonExecutable: drift },
         drift: { executable: "./drift" },
+        preview: {
+          sourceDirectory: "./preview",
+          artifactDirectory: "./preview-artifacts",
+          codexExecutable: "./drift",
+        },
         treeComplete: { sourceDirectory: "./tree-complete", mode: "codex" },
       },
     });
@@ -83,6 +94,12 @@ describe("loadConfig", () => {
         pythonExecutable: realpathSync(drift),
       },
       drift: { executable: realpathSync(drift) },
+      preview: {
+        sourceDirectory: realpathSync(preview),
+        executable: realpathSync(join(preview, "bin/preview")),
+        artifactDirectory: realpathSync(previewArtifacts),
+        codexExecutable: realpathSync(drift),
+      },
       treeComplete: { sourceDirectory: realpathSync(treeComplete), mode: "codex" },
     });
     expect(config.server).toEqual({
@@ -176,6 +193,31 @@ describe("loadConfig", () => {
 
     await expect(loadConfig(configPath)).rejects.toThrow(
       "Tree Complete codex mode requires a compatible built integration",
+    );
+  });
+
+  test("requires Preview artifacts to be disjoint from every configured project", async () => {
+    const directory = root();
+    const project = join(directory, "workspace");
+    const preview = join(directory, "preview");
+    mkdirSync(project);
+    mkdirSync(join(preview, "bin"), { recursive: true });
+    writeFileSync(join(preview, "bin/preview"), "#!/bin/sh\n");
+    chmodSync(join(preview, "bin/preview"), 0o755);
+    const configPath = join(directory, "in-progress.config.json");
+    writeJson(configPath, {
+      projects: [{ id: "demo", name: "Demo", path: "workspace" }],
+      integrations: {
+        preview: {
+          sourceDirectory: "preview",
+          artifactDirectory: "workspace",
+          codexExecutable: "preview/bin/preview",
+        },
+      },
+    });
+
+    await expect(loadConfig(configPath)).rejects.toThrow(
+      "Preview artifact directory must be separate from every project",
     );
   });
 });

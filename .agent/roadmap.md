@@ -52,6 +52,22 @@ Browser + phone-ready personal agent control plane: durable project PTYs, projec
 - [ ] Keep API 1.0 stable; add host authority only for a bounded usage-backed operation that cannot
       remain inside a static project view.
 
+## Preview create/update action
+
+- [x] Move generated dashboard state behind a configured host-owned artifact root outside target repos.
+- [x] Add fixed Preview status/generate authority; pin subscription Codex to `gpt-5.6-sol` + `max`.
+- [x] Render one Preview action as Generate when absent, Update when published; track async completion.
+- [x] Atomically rebuild/reload the aggregate without mutating the selected project checkout.
+- [x] Cover config, authority, concurrency, failure preservation, plugin runtime, and end-to-end routing.
+- [x] Run Preview + host gates, browser QA, adversarial review, cleanup, and scoped commits.
+
+### Preview invariants
+
+- Selected project path = read-only source; generated/staged/plugin artifacts remain outside it.
+- Browser confirmation immediately precedes each token-spending generation request.
+- Model = `gpt-5.6-sol`; reasoning effort = `max`; authenticated local Codex CLI = sole provider path.
+- One project operation at a time; prior published dashboard survives generation/validation failure.
+
 ## Frontier durable execution
 
 - [x] Boundary allocation → TypeScript/Bun UI, Kotlin/Restate policy, Rust effects, Quint model

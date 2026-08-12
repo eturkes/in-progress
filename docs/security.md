@@ -160,6 +160,19 @@ Adding a plugin directory is a security decision. Review its manifest and built 
   environment, so project Python modules/startup hooks cannot execute. Both adapters use fixed argv,
   detached process groups, hard deadlines, output caps, UTF-8/schema checks, and no shell. Plugins
   cannot choose commands, roots, models, or mutating analyzer operations.
+- Preview executable, Codex executable, selected canonical project, external artifact root, model,
+  effort, sandbox, schema, and aggregate source map come only from canonical host configuration and
+  code. The browser sends no path/model/options. Its trusted host button confirms disclosure and
+  subscription use immediately before a CSRF-protected request. The CLI removes API credential
+  environment overrides, requires stored ChatGPT auth plus provider/WebSocket reachability, pins
+  `gpt-5.6-sol` + `max`, and gives Codex a read-only OS sandbox. Generated/staged/plugin files remain
+  in an artifact root canonicalized as disjoint from every configured project. Codex may read any
+  host-readable content, which may reach OpenAI; read-only tooling is not a confidentiality boundary.
+  The authoring run treats the project as untrusted, disables project documents/skills/config, hooks,
+  MCP/apps/plugins, web search, and other external-capability tools, and retains only the read-only
+  shell needed for source inspection. The user-owned global `~/.codex/AGENTS.md` remains
+  model-visible trusted authority. Shutdown kills Codex's detached process group; this is not
+  cgroup/PID-namespace containment for a subprocess that deliberately creates a new session.
 - Tree Complete is an explicitly configured host integration, not an arbitrary plugin backend. Its
   embedded service receives the selected canonical project, a host-owned private data directory,
   and the configured preview/Codex mode. RPC exposes only workspace retrieval and three fork IDs;
