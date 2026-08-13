@@ -1,6 +1,11 @@
 import { join } from "node:path";
 import { z } from "zod";
-import { TreeForkRequestSchema, type AlignStatus, type DriftRender } from "../shared/contracts";
+import {
+  TreeForkRequestSchema,
+  type AlignSetupRequest,
+  type AlignStatus,
+  type DriftRender,
+} from "../shared/contracts";
 import type { InProgressConfig } from "./config";
 import { runBounded } from "./process";
 import { ProjectRegistry } from "./projects";
@@ -184,6 +189,14 @@ const ALIGN_BOOTSTRAP = [
   "runpy.run_module('align',run_name='__main__',alter_sys=True)",
 ].join(";");
 
+const ALIGN_INIT_BOOTSTRAP = [
+  "import runpy,sys",
+  "source,root,title=sys.argv[1:4]",
+  "sys.path.insert(0,source)",
+  "sys.argv=['align','--root',root,'init','--prompt','-','--authority','user','--stage','in_progress','--title',title]",
+  "runpy.run_module('align',run_name='__main__',alter_sys=True)",
+].join(";");
+
 function localProjectText(text: string, projectPath: string): string {
   const quotedFragment = projectPath.replaceAll("'", "'\"'\"'");
   const byteFragment = [...new TextEncoder().encode(projectPath)]
@@ -199,6 +212,7 @@ function localProjectText(text: string, projectPath: string): string {
 
 export class IntegrationRegistry {
   readonly #treeServices = new Map<string, Promise<TreeCompleteService>>();
+  readonly #alignInitializations = new Map<string, Promise<AlignStatus>>();
   #closed = false;
   #closing: Promise<void> | null = null;
 
@@ -297,6 +311,56 @@ export class IntegrationRegistry {
           }
         : null,
     };
+  }
+
+  async initializeAlign(projectId: string, request: AlignSetupRequest): Promise<AlignStatus> {
+    if (this.#closed) throw new HttpError(503, "Integration registry is closed");
+    const projectKey = this.projects.get(projectId).path;
+    if (this.#alignInitializations.has(projectKey)) {
+      throw new HttpError(409, "Alignment is already being initialized");
+    }
+    const operation = this.#initializeAlign(projectId, request);
+    let tracked: Promise<AlignStatus>;
+    tracked = operation.finally(() => {
+      if (this.#alignInitializations.get(projectKey) === tracked) {
+        this.#alignInitializations.delete(projectKey);
+      }
+    });
+    this.#alignInitializations.set(projectKey, tracked);
+    return tracked;
+  }
+
+  async #initializeAlign(projectId: string, request: AlignSetupRequest): Promise<AlignStatus> {
+    const integration = this.config.align;
+    if (!integration) throw new HttpError(503, "Align integration is not configured");
+    const project = this.projects.get(projectId);
+    if ((await this.#alignStatus(projectId)).initialized) {
+      throw new HttpError(409, "Alignment is already initialized");
+    }
+    await runBounded(
+      [
+        integration.pythonExecutable,
+        "-I",
+        "-B",
+        "-S",
+        "-c",
+        ALIGN_INIT_BOOTSTRAP,
+        join(integration.sourceDirectory, "src"),
+        project.path,
+        project.name,
+      ],
+      {
+        cwd: integration.sourceDirectory,
+        env: ISOLATED_TOOL_ENV,
+        timeoutMs: 60_000,
+        stdoutBytes: 4 * 1024,
+        label: "Align setup",
+        stdin: request.prompt,
+      },
+    );
+    const status = await this.#alignStatus(projectId);
+    if (!status.initialized) throw new HttpError(502, "Align setup did not initialize the project");
+    return status;
   }
 
   async #driftRender(projectId: string, rawParams: unknown): Promise<DriftRender> {
@@ -411,9 +475,12 @@ export class IntegrationRegistry {
   close(): Promise<void> {
     if (this.#closing) return this.#closing;
     this.#closed = true;
+    const alignInitializations = [...this.#alignInitializations.values()];
+    this.#alignInitializations.clear();
     const pending = [...this.#treeServices.values()];
     this.#treeServices.clear();
     this.#closing = (async () => {
+      await Promise.allSettled(alignInitializations);
       const services = await Promise.allSettled(pending);
       const failures: unknown[] = services.flatMap((result) =>
         result.status === "rejected" ? [result.reason] : [],

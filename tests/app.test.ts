@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createControlPlane } from "../src/server/app";
 import { configForTests } from "../src/server/config";
@@ -250,6 +250,125 @@ describe("HTTP bootstrap and terminal authorization", () => {
       expect(await final.json()).toMatchObject({
         status: { prompt: "Focus on release readiness." },
       });
+    } finally {
+      await guarded.close();
+      removeDirectory(fixture);
+    }
+  });
+
+  test("binds one-shot Alignment setup to exact intent and the selected project", async () => {
+    const fixture = tempDirectory("alignment-route");
+    const project = join(fixture, "project");
+    const source = join(fixture, "align");
+    const alignPackage = join(source, "src/align");
+    mkdirSync(project);
+    mkdirSync(alignPackage, { recursive: true });
+    writeFileSync(join(alignPackage, "__init__.py"), "");
+    writeFileSync(
+      join(alignPackage, "__main__.py"),
+      [
+        "import json, pathlib, sys",
+        "root = pathlib.Path(sys.argv[sys.argv.index('--root') + 1])",
+        "command = sys.argv[sys.argv.index('--root') + 2]",
+        "state = root / '.alignment-route-fixture.json'",
+        "if command == 'init':",
+        "    state.write_text(json.dumps({'prompt': sys.stdin.buffer.read().decode('utf-8'), 'argv': sys.argv}), encoding='utf-8')",
+        "    print('baseline_fixture')",
+        "else:",
+        "    initialized = state.exists()",
+        "    print(json.dumps({",
+        "      'schema_version': 1, 'initialized': initialized,",
+        "      'contract': {'state': 'missing', 'selected_id': None},",
+        "      'latest': {'snapshot': {'stage': 'in_progress'} if initialized else None, 'matching_assessment_count': 0, 'matching_report_count': 0},",
+        "      'totals': {'amendments': 0, 'assessments': 0, 'checkpoints': int(initialized), 'contracts': 0, 'reports': 0, 'snapshots': int(initialized)},",
+        "      'next_action': None,",
+        "    }))",
+        "",
+      ].join("\n"),
+    );
+    const guarded = createControlPlane(
+      configForTests(fixture, {
+        projects: [
+          {
+            id: "fixture",
+            name: "Fixture project",
+            path: project,
+            displayPath: project,
+            color: "#67d5b5",
+          },
+        ],
+        integrations: {
+          align: { sourceDirectory: source, pythonExecutable: "/usr/bin/python3" },
+        },
+      }),
+      testAppOptions(fixture),
+    );
+    const guardedOrigin = guarded.server.url.origin;
+    try {
+      expect((await fetch(`${guardedOrigin}/api/projects/fixture/alignment`)).status).toBe(401);
+      expect(
+        (
+          await fetch(`${guardedOrigin}/api/projects/fixture/alignment`, {
+            method: "POST",
+          })
+        ).status,
+      ).toBe(403);
+
+      const bootstrap = await fetch(`${guardedOrigin}/api/bootstrap`);
+      const body = (await bootstrap.json()) as { csrfToken: string };
+      const session = bootstrap.headers.get("set-cookie")!.split(";", 1)[0]!;
+      const headers = {
+        cookie: session,
+        origin: guardedOrigin,
+        "sec-fetch-site": "same-origin",
+        "x-in-progress-csrf": body.csrfToken,
+        "content-type": "application/json",
+      };
+      const initial = await fetch(`${guardedOrigin}/api/projects/fixture/alignment`, {
+        headers: { cookie: session },
+      });
+      expect(await initial.json()).toMatchObject({ status: { initialized: false } });
+
+      const invalid = await fetch(`${guardedOrigin}/api/projects/fixture/alignment`, {
+        headers,
+        method: "POST",
+        body: JSON.stringify({ prompt: "   " }),
+      });
+      expect(invalid.status).toBe(400);
+      const invalidUtf8 = await fetch(`${guardedOrigin}/api/projects/fixture/alignment`, {
+        headers,
+        method: "POST",
+        body: Uint8Array.from([
+          ...new TextEncoder().encode('{"prompt":"'),
+          0xff,
+          ...new TextEncoder().encode('"}'),
+        ]),
+      });
+      expect(invalidUtf8.status).toBe(400);
+      expect(existsSync(join(project, ".alignment-route-fixture.json"))).toBe(false);
+
+      const prompt = "  Exact project intent.\r\nFinal line.\n";
+      const setup = await fetch(`${guardedOrigin}/api/projects/fixture/alignment`, {
+        headers,
+        method: "POST",
+        body: JSON.stringify({ prompt }),
+      });
+      expect(setup.status).toBe(201);
+      expect(await setup.json()).toMatchObject({
+        status: { initialized: true, latest: { stage: "in_progress" } },
+      });
+      const capture = JSON.parse(
+        readFileSync(join(project, ".alignment-route-fixture.json"), "utf8"),
+      ) as { prompt: string; argv: string[] };
+      expect(capture.prompt).toBe(prompt);
+      expect(capture.argv).toContain("Fixture project");
+
+      const repeat = await fetch(`${guardedOrigin}/api/projects/fixture/alignment`, {
+        headers,
+        method: "POST",
+        body: JSON.stringify({ prompt: "Replacement" }),
+      });
+      expect(repeat.status).toBe(409);
     } finally {
       await guarded.close();
       removeDirectory(fixture);

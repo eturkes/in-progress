@@ -37,6 +37,7 @@ import {
   useState,
 } from "react";
 import type {
+  AlignStatus,
   BootstrapDto,
   EventDto,
   PluginDto,
@@ -44,7 +45,9 @@ import type {
   ProjectDto,
 } from "../shared/contracts";
 import { moveRovingTab, trapTab } from "./a11y";
+import { confirmAlignmentSetup } from "./alignment-authority";
 import { ApiClient, bootstrap } from "./api";
+import { AlignmentSetup } from "./components/AlignmentSetup";
 import { NotificationCenter, useEventFeed } from "./components/Notifications";
 import { PluginFrame, type PluginStatus } from "./components/PluginFrame";
 import { PreviewControls } from "./components/PreviewControls";
@@ -210,6 +213,13 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
   const [online, setOnline] = useState(navigator.onLine);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [pluginStatuses, setPluginStatuses] = useState<Record<string, PluginStatus>>({});
+  const [alignmentStatuses, setAlignmentStatuses] = useState<Record<string, AlignStatus>>({});
+  const [alignmentErrors, setAlignmentErrors] = useState<Record<string, string>>({});
+  const [alignmentStarting, setAlignmentStarting] = useState<string | null>(null);
+  const [alignmentDrafts, setAlignmentDrafts] = useState<Record<string, string>>({});
+  const [alignmentFrameRevisions, setAlignmentFrameRevisions] = useState<Record<string, number>>(
+    {},
+  );
   const [previewStatuses, setPreviewStatuses] = useState<Record<string, PreviewStatus>>({});
   const [previewErrors, setPreviewErrors] = useState<Record<string, string>>({});
   const [previewStarting, setPreviewStarting] = useState<string | null>(null);
@@ -219,6 +229,7 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
   const toastCounter = useRef(0);
   const previewSnapshots = useRef<Record<string, PreviewStatus>>({});
   const previewRequestEpochs = useRef<Record<string, number>>({});
+  const alignmentRequestEpochs = useRef<Record<string, number>>({});
   const projectSearchRef = useRef<HTMLInputElement>(null);
   const projectOpenerRef = useRef<HTMLElement | null>(null);
   const drawerWasOpenRef = useRef(false);
@@ -421,6 +432,81 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
   );
 
   useEffect(() => {
+    if (!project || plugin?.id !== "align") return;
+    let active = true;
+    const projectId = project.id;
+    const requestEpoch = alignmentRequestEpochs.current[projectId] ?? 0;
+    void api.alignmentStatus(projectId).then(
+      (next) => {
+        if (!active || requestEpoch !== (alignmentRequestEpochs.current[projectId] ?? 0)) return;
+        setAlignmentStatuses((current) => ({ ...current, [projectId]: next }));
+        setAlignmentErrors((current) => {
+          if (!(projectId in current)) return current;
+          const updated = { ...current };
+          delete updated[projectId];
+          return updated;
+        });
+      },
+      (statusError: unknown) => {
+        if (!active || requestEpoch !== (alignmentRequestEpochs.current[projectId] ?? 0)) return;
+        setAlignmentErrors((current) => ({
+          ...current,
+          [projectId]: friendlyError(statusError),
+        }));
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [api, plugin?.id, project]);
+
+  const setupAlignment = useCallback(async () => {
+    if (!project || plugin?.id !== "align") return;
+    const status = alignmentStatuses[project.id];
+    if (!status || status.initialized || alignmentErrors[project.id]) return;
+    const request = { prompt: alignmentDrafts[project.id] ?? "" };
+    if (!confirmAlignmentSetup(project, request, window.confirm.bind(window))) return;
+    alignmentRequestEpochs.current[project.id] =
+      (alignmentRequestEpochs.current[project.id] ?? 0) + 1;
+    setAlignmentStarting(project.id);
+    try {
+      const next = await api.setupAlignment(project.id, request);
+      alignmentRequestEpochs.current[project.id] =
+        (alignmentRequestEpochs.current[project.id] ?? 0) + 1;
+      setAlignmentStatuses((current) => ({ ...current, [project.id]: next }));
+      setAlignmentDrafts((current) => ({ ...current, [project.id]: "" }));
+      setAlignmentFrameRevisions((current) => ({
+        ...current,
+        [project.id]: (current[project.id] ?? 0) + 1,
+      }));
+      showToast("Alignment baseline is ready");
+    } catch (setupError) {
+      let initializedAfterError = false;
+      try {
+        const latest = await api.alignmentStatus(project.id);
+        setAlignmentStatuses((current) => ({ ...current, [project.id]: latest }));
+        if (latest.initialized) {
+          initializedAfterError = true;
+          setAlignmentFrameRevisions((current) => ({
+            ...current,
+            [project.id]: (current[project.id] ?? 0) + 1,
+          }));
+        }
+      } catch {
+        // Preserve the actionable setup error; the plugin's own status view remains independent.
+      }
+      showToast(
+        initializedAfterError
+          ? "Alignment is initialized — verify its frozen intent"
+          : friendlyError(setupError),
+        initializedAfterError ? "neutral" : "danger",
+      );
+    } finally {
+      setAlignmentStarting((current) => (current === project.id ? null : current));
+    }
+  }, [alignmentDrafts, alignmentErrors, alignmentStatuses, api, plugin?.id, project, showToast]);
+
+  useEffect(() => {
     if (!project || plugin?.id !== "preview") return;
     let active = true;
     let loading = false;
@@ -559,6 +645,8 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
   }
 
   const shortcutModifier = navigator.platform.includes("Mac") ? "⌘" : "Ctrl";
+  const alignmentStatus = alignmentStatuses[project.id];
+  const alignmentDraft = alignmentDrafts[project.id] ?? "";
   const previewStatus = previewStatuses[project.id];
   const previewDraft = previewDrafts[project.id] ?? previewStatus?.prompt ?? "";
 
@@ -795,6 +883,20 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
             </SortableList>
           </div>
           <div className="host-actions">
+            {plugin.id === "align" && alignmentStatus?.initialized !== true ? (
+              <AlignmentSetup
+                key={project.id}
+                project={project}
+                status={alignmentStatus}
+                error={alignmentErrors[project.id]}
+                draft={alignmentDraft}
+                starting={alignmentStarting === project.id}
+                onDraft={(value) =>
+                  setAlignmentDrafts((current) => ({ ...current, [project.id]: value }))
+                }
+                onSetup={() => void setupAlignment()}
+              />
+            ) : null}
             {plugin.id === "preview" ? (
               <PreviewControls
                 key={project.id}
@@ -882,7 +984,7 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
             </Suspense>
           ) : (
             <PluginFrame
-              key={`${project.id}:${plugin.id}:${previewFrameRevisions[project.id] ?? 0}:${resolvedTheme}`}
+              key={`${project.id}:${plugin.id}:${previewFrameRevisions[project.id] ?? 0}:${alignmentFrameRevisions[project.id] ?? 0}:${resolvedTheme}`}
               api={api}
               project={project}
               plugin={plugin}

@@ -108,6 +108,23 @@ Browser + phone-ready personal agent control plane: durable project PTYs, projec
 - Development worker navigation handles only `/` + `/p/*`; `/api/*` + `/plugins/*` remain live network
   boundaries.
 
+## Alignment one-click setup
+
+- [x] Add a trusted project-bound Align initialization route with bounded exact-intent input.
+- [x] Replace the uninitialized iframe state with a host-owned setup surface; remount verified status after setup.
+- [x] Cover input authority, fixed invocation, isolation, repeat/race rejection, CSRF routing, and UI contracts.
+- [x] Run host + browser gates, adversarial review, cleanup, and one scoped commit.
+
+### Setup invariants
+
+- The user supplies the exact initiating intent; repository content never invents or rewrites it.
+- Browser authority = bounded prompt text only. Host fixes project root/name, Align source/Python,
+  `user` authority, and `in_progress` stage.
+- Prompt crosses stdin; isolated Python receives no project import/startup authority. One initialization per
+  canonical project path runs at a time, and an existing immutable baseline is never replaced.
+- Setup writes only Align's project-local `.align` state; the static iframe retains read-only
+  `align.status` authority.
+
 ## Frontier durable execution
 
 - [x] Boundary allocation → TypeScript/Bun UI, Kotlin/Restate policy, Rust effects, Quint model

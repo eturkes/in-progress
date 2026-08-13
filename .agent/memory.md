@@ -26,6 +26,10 @@
   ingress is Unix-only. Any future browser operation must cross the existing Bun auth/origin/CSRF gate.
 - Frontier first real migration target = read-only `align.status`. `slide-gen` stays external until
   deck/render operation identity + publication receipt semantics are specified.
+- Alignment setup = trusted host chrome accepts one exact bounded initiating intent, confirms the
+  project-local write, then invokes fixed isolated Align initialization with prompt on stdin,
+  host-owned root/name + `user`/`in_progress`. Existing state rejects; native immutability closes
+  races; fresh verified status remounts the still-read-only iframe.
 - Preview authoring = fixed ChatGPT-authenticated `gpt-5.6-sol`/`max` read-only Codex CLI. Manual or
   clean-commit automatic policy + bounded per-project prompt live in host SQLite; default update passes
   the prior validated model explicitly, while fresh omits it. Models/bundles/records/aggregate live at

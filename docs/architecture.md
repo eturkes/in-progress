@@ -77,11 +77,13 @@ The machine-readable contract is [in-progress-config.schema.json](in-progress-co
 
 Project configuration is static for a server run. Each project record supplies the trusted canonical working directory used for sanitized read-only Git queries, plugin reads, and new shells.
 
-Integration configuration is also static and host-owned. Align gets one fixed read-only status
-invocation; Drift gets one fixed validating render invocation; Preview gets one project-bound
+Integration configuration is also static and host-owned. Align gets fixed status plus one-shot local
+initialization invocations; Drift gets one fixed validating render invocation; Preview gets one project-bound
 external generate/package operation; Tree Complete loads one built embedded service per selected
 project with host-fixed project/data roots and runner mode. Static plugin manifests grant access to
-named read methods but cannot configure code, argv, paths, models, or mode. Preview remains
+named read methods but cannot configure code, argv, paths, models, or mode. Alignment's iframe stays
+read-only; trusted host chrome owns exact-intent entry, local-write confirmation, fixed initialization,
+and verified remount. Preview remains
 capability-free: trusted host chrome owns its button, disclosure confirmation, CSRF mutation, async
 job, commit-triggered automatic policy, and frame remount. Its CLI fixes ChatGPT auth, `gpt-5.6-sol`,
 `max`, a read-only OS sandbox, structured output validation, and atomic external publication. Update
@@ -159,6 +161,8 @@ Core routes:
 | `POST /api/projects/:id/sessions`                 | create PTY                            |
 | `DELETE /api/projects/:id/sessions/:sid`          | terminate PTY                         |
 | `POST …/:sid/ticket`                              | mint one-use WebSocket ticket         |
+| `GET /api/projects/:id/alignment`                 | verified Alignment lifecycle status   |
+| `POST /api/projects/:id/alignment`                | freeze intent + initial snapshot      |
 | `GET /api/projects/:id/preview`                   | external dashboard/job status         |
 | `POST /api/projects/:id/preview`                  | start Preview update/fresh generation |
 | `PUT /api/projects/:id/preview`                   | set Preview manual/automatic + prompt |

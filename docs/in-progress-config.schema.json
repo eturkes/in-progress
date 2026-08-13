@@ -82,7 +82,7 @@
               "type": "string",
               "minLength": 1,
               "default": "/usr/bin/python3",
-              "description": "Existing Python executable used with an isolated -I -S bootstrap into the fixed Align source."
+              "description": "Existing Python executable used with an isolated -I -B -S bootstrap into the fixed Align source for status and one-shot local initialization."
             }
           }
         },

@@ -163,6 +163,25 @@ function hasLoneSurrogate(value: string): boolean {
   return false;
 }
 
+export const AlignSetupRequestSchema = z
+  .object({
+    prompt: z
+      .string()
+      .refine((value) => value.trim().length > 0, "Alignment intent cannot be empty")
+      .refine((value) => !value.includes("\0"), "Alignment intent cannot contain a null byte")
+      .refine(
+        (value) => !hasLoneSurrogate(value),
+        "Alignment intent cannot contain a lone surrogate",
+      )
+      .refine(
+        (value) => new TextEncoder().encode(value).byteLength <= 60_000,
+        "Alignment intent cannot exceed 60000 UTF-8 bytes",
+      ),
+  })
+  .strict();
+
+export type AlignSetupRequest = z.infer<typeof AlignSetupRequestSchema>;
+
 export const PreviewPromptSchema = z
   .string()
   .refine((value) => !value.includes("\0"), "Preview prompt cannot contain a null byte")

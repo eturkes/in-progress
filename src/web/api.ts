@@ -1,4 +1,6 @@
 import type {
+  AlignSetupRequest,
+  AlignStatus,
   BootstrapDto,
   EventDto,
   PluginRpcRequest,
@@ -113,6 +115,22 @@ export class ApiClient {
       request,
     );
     return body.result;
+  }
+
+  async alignmentStatus(projectId: string): Promise<AlignStatus> {
+    const body = await this.#get<{ status: AlignStatus }>(
+      `/api/projects/${encodeURIComponent(projectId)}/alignment`,
+    );
+    return body.status;
+  }
+
+  async setupAlignment(projectId: string, request: AlignSetupRequest): Promise<AlignStatus> {
+    const body = await this.#mutation<{ status: AlignStatus }>(
+      `/api/projects/${encodeURIComponent(projectId)}/alignment`,
+      "POST",
+      request,
+    );
+    return body.status;
   }
 
   async previewStatus(projectId: string): Promise<PreviewStatus> {

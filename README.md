@@ -139,7 +139,7 @@ pnpm dev:ecosystem
 
 | View          | Project-bound behavior                                                        | Host authority                         |
 | ------------- | ----------------------------------------------------------------------------- | -------------------------------------- |
-| Align         | Compact verified lifecycle + next action                                      | Fixed read-only `align status`         |
+| Align         | Compact verified lifecycle, one-click setup, and next action                  | Fixed status + local initialization    |
 | Drift         | Discovers candidate report JSON; renders only native-validator-clean reports  | Fixed `drift render`                   |
 | Preview       | Selects, generates, or updates the active project's validated dashboard       | Fixed read-only Codex authoring        |
 | Tree Complete | Explores/forks project-identified decision lineage; default simulates locally | Narrow embedded workspace/fork service |
@@ -157,6 +157,12 @@ newer loose record. Configuring the Preview integration also installs
 Stages,
 locks, and recovery backups remain ignored. Projects without a matching package display an explicit
 unavailable state.
+
+In the Alignment view, **Set up Alignment** accepts the exact initiating request once, confirms the
+project-local write, and freezes it verbatim with the current repository snapshot. The browser can
+send only that bounded UTF-8 text; the host fixes the selected root/name, trusted Align source and
+Python, `user` authority, and `in_progress` stage. Setup writes `.align` locally, contacts no model or
+external service, rejects an existing baseline, and reloads the verified lifecycle view after success.
 
 In the Preview view, **Generate Preview** creates the external dashboard. **Update Preview** supplies
 the prior validated declarative model as continuity while re-verifying it against current source;

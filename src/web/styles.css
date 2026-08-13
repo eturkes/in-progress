@@ -946,6 +946,177 @@ button:disabled {
   font-size: 10px;
 }
 
+.alignment-setup {
+  --alignment-accent: light-dark(#8d5b12, #e8b55b);
+  position: relative;
+  align-self: center;
+}
+
+.alignment-setup-trigger,
+.alignment-setup-submit {
+  display: inline-flex;
+  min-width: max-content;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid color-mix(in srgb, var(--alignment-accent) 48%, transparent);
+  border-radius: 7px;
+  color: var(--alignment-accent);
+  background: color-mix(in srgb, var(--alignment-accent) 10%, var(--surface-raised));
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.alignment-setup-trigger:hover:not(:disabled),
+.alignment-setup-trigger[aria-expanded="true"],
+.alignment-setup-submit:hover:not(:disabled) {
+  border-color: var(--alignment-accent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--alignment-accent) 16%, var(--surface-raised));
+}
+
+.alignment-setup-trigger:disabled,
+.alignment-setup-submit:disabled {
+  opacity: 0.52;
+}
+
+.alignment-setup-trigger.is-busy svg {
+  animation: spin 900ms linear infinite;
+}
+
+.alignment-setup-panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 9px);
+  right: 0;
+  width: min(430px, calc(100vw - 20px));
+  padding: 15px;
+  border: 1px solid color-mix(in srgb, var(--alignment-accent) 35%, var(--border));
+  border-radius: 12px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow:
+    0 22px 60px light-dark(#3328173d, #000b),
+    0 0 0 1px light-dark(#34270f0a, #ffffff08);
+}
+
+.alignment-setup-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.alignment-setup-heading > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.alignment-setup-heading strong {
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.alignment-setup-heading div > span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.alignment-setup-badge {
+  padding: 3px 6px;
+  border: 1px solid color-mix(in srgb, var(--alignment-accent) 38%, transparent);
+  border-radius: 999px;
+  color: var(--alignment-accent);
+  background: color-mix(in srgb, var(--alignment-accent) 8%, var(--surface-raised));
+  font-family: "Iosevka", monospace;
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.alignment-setup-copy {
+  margin: 12px 0 0;
+  color: var(--muted-strong);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.alignment-intent-field {
+  display: flex;
+  margin-top: 13px;
+  flex-direction: column;
+}
+
+.alignment-intent-field > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted-strong);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.alignment-intent-field small {
+  color: var(--muted);
+  font-family: "Iosevka", monospace;
+  font-size: 8px;
+  font-weight: 500;
+}
+
+.alignment-intent-field textarea {
+  width: 100%;
+  min-height: 148px;
+  margin-top: 6px;
+  padding: 10px 11px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+  color: var(--text);
+  background: light-dark(#f8faf9, #0e151f);
+  font-family: "Atkinson Hyperlegible Next", sans-serif;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.alignment-intent-field textarea:focus {
+  border-color: var(--alignment-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--alignment-accent) 14%, transparent);
+}
+
+.alignment-setup-warning {
+  display: flex;
+  margin: 9px 0 0;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 7px 8px;
+  border-radius: 7px;
+  color: light-dark(#92501d, #ffc98f);
+  background: light-dark(#fbefdf, #312316);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.alignment-setup-submit {
+  width: 100%;
+  min-height: 38px;
+  margin-top: 12px;
+}
+
+.alignment-setup-note {
+  margin: 9px 0 0;
+  color: var(--muted);
+  font-family: "Iosevka", monospace;
+  font-size: 8px;
+  text-align: center;
+}
+
 .preview-controls {
   position: relative;
   align-self: center;
@@ -2572,7 +2743,8 @@ kbd {
   }
 
   .preview-button,
-  .preview-menu-button {
+  .preview-menu-button,
+  .alignment-setup-trigger {
     min-height: 44px;
   }
 
@@ -2581,6 +2753,16 @@ kbd {
   }
 
   .preview-menu {
+    position: fixed;
+    top: calc(58px + env(safe-area-inset-top));
+    right: calc(10px + env(safe-area-inset-right));
+    left: calc(10px + env(safe-area-inset-left));
+    width: auto;
+    max-height: calc(100dvh - 68px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+
+  .alignment-setup-panel {
     position: fixed;
     top: calc(58px + env(safe-area-inset-top));
     right: calc(10px + env(safe-area-inset-right));

@@ -3,6 +3,7 @@ import { relative, resolve, sep } from "node:path";
 import { timingSafeEqual } from "node:crypto";
 import { z, ZodError } from "zod";
 import {
+  AlignSetupRequestSchema,
   NotificationEventInputSchema,
   PluginRpcRequestSchema,
   PreviewGenerationRequestSchema,
@@ -62,7 +63,12 @@ async function jsonBody(request: Request, maxBytes = 64 * 1024): Promise<unknown
   if (length > maxBytes) throw new HttpError(413, "Request body too large");
   const bytes = await request.arrayBuffer();
   if (bytes.byteLength > maxBytes) throw new HttpError(413, "Request body too large");
-  const text = new TextDecoder().decode(bytes);
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new HttpError(400, "Request body is not valid UTF-8");
+  }
   try {
     return text ? JSON.parse(text) : {};
   } catch {
@@ -224,6 +230,24 @@ export function createControlPlane(config: InProgressConfig, options: AppOptions
       if (sessionsRoute && request.method === "POST") {
         security.assertBrowserMutation(request);
         return api({ session: await terminals.create(sessionsRoute[1]!) }, { status: 201 });
+      }
+
+      const alignmentRoute = /^\/api\/projects\/([a-z][a-z0-9-]+)\/alignment$/.exec(pathname);
+      if (alignmentRoute && request.method === "GET") {
+        security.requireSession(request);
+        bunServer.timeout(request, 20);
+        return api({
+          status: await integrations.dispatch(alignmentRoute[1]!, "align.status", undefined),
+        });
+      }
+      if (alignmentRoute && request.method === "POST") {
+        security.assertBrowserMutation(request);
+        bunServer.timeout(request, 100);
+        const input = AlignSetupRequestSchema.parse(await jsonBody(request, 512 * 1024));
+        return api(
+          { status: await integrations.initializeAlign(alignmentRoute[1]!, input) },
+          { status: 201 },
+        );
       }
 
       const previewRoute = /^\/api\/projects\/([a-z][a-z0-9-]+)\/preview$/.exec(pathname);

@@ -156,8 +156,12 @@ Adding a plugin directory is a security decision. Review its manifest and built 
   fsmonitor/hooks, and runs in a detached process group with a three-second hard deadline, 1 MiB
   output cap, and two-second per-project cache. Failure reports `available: false`/`clean: false`.
 - Align and Drift executable authority comes only from canonical host configuration. Align uses
-  `python -I -S`, a fixed bootstrap/source root, a non-project working directory, and a sanitized
-  environment, so project Python modules/startup hooks cannot execute. Both adapters use fixed argv,
+  `python -I -B -S`, a fixed bootstrap/source root, a non-project working directory, and a sanitized
+  environment, so project Python modules/startup hooks cannot execute. Its trusted setup surface
+  accepts only exact bounded intent over stdin; root/name, authority, stage, executable, and argv stay
+  host-fixed. It confirms immediately before creating project-local `.align`, serializes setup per
+  project, rejects verified initialized state, and returns only freshly verified projected status.
+  Both adapters use fixed argv,
   detached process groups, hard deadlines, output caps, UTF-8/schema checks, and no shell. Plugins
   cannot choose commands, roots, models, or mutating analyzer operations.
 - Preview executable, Codex executable, selected canonical project, external artifact root, model,

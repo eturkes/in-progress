@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  AlignSetupRequestSchema,
   NotificationEventInputSchema,
   PluginManifestSchema,
   PreviewGenerationRequestSchema,
@@ -7,6 +8,7 @@ import {
 } from "../src/shared/contracts";
 import { DEVELOPMENT_CSP_NONCE_PLACEHOLDER } from "../src/shared/development";
 import { developmentProxyTarget } from "../src/server/app";
+import { confirmAlignmentSetup } from "../src/web/alignment-authority";
 import { authorizePluginRequest } from "../src/web/plugin-authority";
 import viteConfig, { DEVELOPMENT_PWA_NAVIGATION_ALLOWLIST } from "../vite.config";
 
@@ -109,6 +111,61 @@ describe("shared trust-boundary contracts", () => {
     expect(() =>
       PreviewSettingsRequestSchema.parse({ mode: "automatic", prompt: "", path: "/tmp" }),
     ).toThrow();
+  });
+
+  test("Alignment setup preserves one bounded exact intent and rejects extra authority", () => {
+    const prompt = "  Exact initiating intent.\nKeep this final newline.\n";
+    expect(AlignSetupRequestSchema.parse({ prompt })).toEqual({ prompt });
+    expect(AlignSetupRequestSchema.parse({ prompt: "é".repeat(30_000) })).toEqual({
+      prompt: "é".repeat(30_000),
+    });
+    expect(() => AlignSetupRequestSchema.parse({ prompt: " \n\t" })).toThrow();
+    expect(() => AlignSetupRequestSchema.parse({ prompt: "x".repeat(60_001) })).toThrow();
+    expect(() => AlignSetupRequestSchema.parse({ prompt: "é".repeat(30_001) })).toThrow();
+    expect(() => AlignSetupRequestSchema.parse({ prompt: "intent\0tail" })).toThrow();
+    expect(() => AlignSetupRequestSchema.parse({ prompt: "broken \ud800" })).toThrow();
+    expect(() =>
+      AlignSetupRequestSchema.parse({ prompt: "Intent", root: "/tmp/other", stage: "released" }),
+    ).toThrow();
+  });
+
+  test("Alignment setup confirmation names the immutable project-local write", () => {
+    const prompts: string[] = [];
+    expect(
+      confirmAlignmentSetup(
+        { id: "fixture", name: "Fixture\nproject", displayPath: "/workspace/fixture" },
+        { prompt: "  Exact intent.\n" },
+        (message) => {
+          prompts.push(message);
+          return true;
+        },
+      ),
+    ).toBe(true);
+    expect(prompts[0]).toMatch(
+      /Project: Fixture\\u\{a\}project.*Project ID: fixture.*Project root: \/workspace\/fixture/s,
+    );
+    expect(prompts[0]).toMatch(
+      /exact UTF-8 text.*including whitespace.*immutable initiating intent/s,
+    );
+    expect(prompts[0]).toMatch(/writes \.align.*initial in_progress snapshot/s);
+    expect(prompts[0]).toMatch(
+      /sent only to this in-progress host.*no model or external service.*cannot be replaced/s,
+    );
+  });
+
+  test("Alignment setup stays in trusted host chrome", async () => {
+    const app = await Bun.file(new URL("../src/web/App.tsx", import.meta.url)).text();
+    const api = await Bun.file(new URL("../src/web/api.ts", import.meta.url)).text();
+    const controls = await Bun.file(
+      new URL("../src/web/components/AlignmentSetup.tsx", import.meta.url),
+    ).text();
+
+    expect(app).toContain('plugin.id === "align"');
+    expect(app).toContain("<AlignmentSetup");
+    expect(app).toContain("alignmentFrameRevisions");
+    expect(api).toMatch(/setupAlignment.*\/alignment.*"POST"/s);
+    expect(controls).toContain("Paste the exact request that started this project");
+    expect(controls).toContain("onClick={onSetup}");
   });
 
   test("ecosystem build uses Preview's checkout-owned launcher", async () => {

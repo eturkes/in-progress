@@ -322,6 +322,34 @@ history/source payloads and canonical host paths, then returns:
 The plugin cannot select a root, executable, argument, model, or mutating Align command. Exact
 prompts, clauses, evidence, assessments, history, and reports remain outside this capability.
 
+### Host-owned Alignment setup
+
+Alignment's static iframe retains only `align.status`; trusted React chrome owns **Set up
+Alignment**. `GET /api/projects/:id/alignment` supplies the same projected status to that chrome.
+After the user enters the exact initiating intent, a trusted confirmation names the selected
+project/root, `.align` write, immutable intent, initial `in_progress` snapshot, and absence of model or
+external-service use. Only then does the CSRF-protected POST accept:
+
+```ts
+{
+  prompt: string; // exact nonblank UTF-8 text, ≤60,000 encoded bytes
+}
+```
+
+The host fixes canonical project root/name, configured Align source/Python, `user` authority,
+`in_progress` stage, every argument, timeout, and output bound. Prompt text crosses stdin and never
+argv. Python runs `-I -B -S` from the trusted Align checkout with a sanitized environment, so the
+selected repository supplies neither imports nor startup hooks. One setup per canonical project path
+is admitted at a time—even when config IDs alias it; verified initialized state rejects the operation
+before invocation. Native Align
+immutability remains the final race-safe boundary, and the host accepts success only after a fresh
+schema-validated status reports `initialized: true`. The successful response contains projected
+status—not the intent—and remounts the read-only iframe.
+
+Align owns the on-disk transaction. A native crash or forced timeout can leave fail-closed partial
+`.align` state; the host never deletes, replaces, or guesses how to repair it. Inspect that state in
+the project before any manual recovery.
+
 ### `drift.render`
 
 Permission: `drift.render`. Requires the trusted host-side Drift integration.
@@ -416,7 +444,7 @@ strict, sorted aggregate index rather than untrusted iframe status text.
 - Additive optional init-context/status fields may appear within v1; ignore unknown non-security
   data there. Native-adapter RPC results use exact host schemas and require a coordinated rebuild.
 - Capability names and method semantics remain stable for the v1 lifetime.
-- New authority always requires a new manifest capability and host enforcement.
+- New iframe-originated authority always requires a new manifest capability and host enforcement.
 - A plugin never receives an arbitrary filesystem root, terminal object, auth credential, CSRF token, or raw network primitive.
 - Backend/process plugins are outside v1. Add them only with a separate OS sandbox and protocol design.
 - Native integrations are host-owned fixed adapters configured separately from manifests; a plugin

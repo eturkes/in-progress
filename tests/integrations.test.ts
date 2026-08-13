@@ -74,6 +74,71 @@ function fixture(stage = "candidate_final"): {
   };
 }
 
+function setupFixture(): {
+  integrations: IntegrationRegistry;
+  projectRoot: string;
+  alignRoot: string;
+} {
+  const projectRoot = join(root("align-setup-project"), "workspace's boundary");
+  mkdirSync(projectRoot);
+  const alignRoot = root("align-setup-source");
+  const alignPackage = join(alignRoot, "src/align");
+  mkdirSync(alignPackage, { recursive: true });
+  writeFileSync(join(alignPackage, "__init__.py"), "");
+  writeFileSync(
+    join(alignPackage, "__main__.py"),
+    [
+      "import json, pathlib, sys, time",
+      "root = pathlib.Path(sys.argv[sys.argv.index('--root') + 1])",
+      "state = root / '.align-fixture.json'",
+      "command = sys.argv[sys.argv.index('--root') + 2]",
+      "if command == 'init':",
+      "    prompt = sys.stdin.buffer.read().decode('utf-8')",
+      "    if prompt.startswith('slow:'): time.sleep(0.2)",
+      "    if prompt.startswith('fail:'): raise SystemExit(2)",
+      "    state.write_text(json.dumps({'argv': sys.argv, 'prompt': prompt}), encoding='utf-8')",
+      "    print('baseline_fixture')",
+      "elif command == 'status':",
+      "    initialized = state.exists()",
+      "    print(json.dumps({",
+      "      'schema_version': 1, 'initialized': initialized,",
+      "      'contract': {'state': 'missing', 'selected_id': None},",
+      "      'latest': {'snapshot': {'stage': 'in_progress'} if initialized else None, 'matching_assessment_count': 0, 'matching_report_count': 0},",
+      "      'totals': {'amendments': 0, 'assessments': 0, 'checkpoints': int(initialized), 'contracts': 0, 'reports': 0, 'snapshots': int(initialized)},",
+      "      'next_action': None,",
+      "    }))",
+      "else:",
+      "    raise SystemExit(2)",
+      "",
+    ].join("\n"),
+  );
+  const config = configForTests(projectRoot, {
+    projects: [
+      {
+        id: "fixture",
+        name: "Fixture's project",
+        path: projectRoot,
+        displayPath: projectRoot,
+        color: "#67d5b5",
+      },
+      {
+        id: "fixture-alias",
+        name: "Fixture alias",
+        path: projectRoot,
+        displayPath: projectRoot,
+        color: "#67d5b5",
+      },
+    ],
+    integrations: { align: { sourceDirectory: alignRoot, pythonExecutable: "/usr/bin/python3" } },
+  });
+  const projects = new ProjectRegistry(config.projects);
+  return {
+    integrations: new IntegrationRegistry(config.integrations, projects, config.dataDir),
+    projectRoot,
+    alignRoot,
+  };
+}
+
 describe("fixed integration adapters", () => {
   test("enforces a hard deadline across a subprocess group and inherited pipes", async () => {
     const directory = root("integration-process-group");
@@ -184,6 +249,91 @@ describe("fixed integration adapters", () => {
     expect(JSON.stringify(status)).not.toContain(projectRoot);
   });
 
+  test("initializes Align from exact stdin while fixing every other authority", async () => {
+    const { integrations, projectRoot, alignRoot } = setupFixture();
+    const prompt = "  Keep argv-looking text literal: --root /tmp/other\r\nFinal line.\n";
+
+    const status = await integrations.initializeAlign("fixture", { prompt });
+    const capture = JSON.parse(readFileSync(join(projectRoot, ".align-fixture.json"), "utf8")) as {
+      argv: string[];
+      prompt: string;
+    };
+
+    expect(status).toMatchObject({
+      initialized: true,
+      latest: { stage: "in_progress" },
+      totals: { checkpoints: 1, snapshots: 1 },
+    });
+    expect(capture.prompt).toBe(prompt);
+    expect(capture.argv[0]).toBe(join(alignRoot, "src/align/__main__.py"));
+    expect(capture.argv.slice(1)).toEqual([
+      "--root",
+      projectRoot,
+      "init",
+      "--prompt",
+      "-",
+      "--authority",
+      "user",
+      "--stage",
+      "in_progress",
+      "--title",
+      "Fixture's project",
+    ]);
+    expect(capture.argv).not.toContain(prompt);
+    expect(JSON.stringify(status)).not.toContain(prompt);
+    await expect(
+      integrations.initializeAlign("fixture", { prompt: "Replacement intent" }),
+    ).rejects.toThrow("already initialized");
+  });
+
+  test("admits only one concurrent Align initialization per project", async () => {
+    const { integrations } = setupFixture();
+    const first = integrations.initializeAlign("fixture", { prompt: "slow:first intent" });
+    await Bun.sleep(20);
+
+    await expect(
+      integrations.initializeAlign("fixture-alias", { prompt: "second intent" }),
+    ).rejects.toThrow("already being initialized");
+    await expect(first).resolves.toMatchObject({ initialized: true });
+  });
+
+  test("releases Align setup admission after failure and drains accepted setup on close", async () => {
+    const failed = setupFixture();
+    await expect(
+      failed.integrations.initializeAlign("fixture", { prompt: "fail:first intent" }),
+    ).rejects.toThrow("rejected the project state");
+    await expect(
+      failed.integrations.initializeAlign("fixture", { prompt: "retry intent" }),
+    ).resolves.toMatchObject({ initialized: true });
+
+    const draining = setupFixture();
+    const setup = draining.integrations.initializeAlign("fixture", { prompt: "slow:exact intent" });
+    await Bun.sleep(20);
+    await expect(draining.integrations.close()).resolves.toBeUndefined();
+    await expect(setup).resolves.toMatchObject({ initialized: true });
+    await expect(
+      draining.integrations.initializeAlign("fixture", { prompt: "later" }),
+    ).rejects.toThrow("closed");
+  });
+
+  test("isolates Align initialization imports and startup hooks from the selected project", async () => {
+    const { integrations, projectRoot, alignRoot } = setupFixture();
+    const marker = join(projectRoot, "project-python-executed-during-setup");
+    writeFileSync(
+      join(projectRoot, "align.py"),
+      `from pathlib import Path\nPath(${JSON.stringify(marker)}).write_text('align shadow')\n`,
+    );
+    writeFileSync(
+      join(projectRoot, "sitecustomize.py"),
+      `from pathlib import Path\nPath(${JSON.stringify(marker)}).write_text('startup hook')\n`,
+    );
+
+    await integrations.initializeAlign("fixture", { prompt: "Exact intent" });
+
+    expect(existsSync(marker)).toBe(false);
+    expect(existsSync(join(alignRoot, "src/align/__pycache__"))).toBe(false);
+  });
+
   test("isolates Align imports and startup hooks from the selected project", async () => {
     const { integrations, projectRoot, alignRoot } = fixture();
     const marker = join(projectRoot, "project-python-executed");
@@ -280,6 +430,9 @@ describe("fixed integration adapters", () => {
     await expect(integrations.dispatch("fixture", "align.status", undefined)).rejects.toThrow(
       "not configured",
     );
+    await expect(
+      integrations.initializeAlign("fixture", { prompt: "Exact intent" }),
+    ).rejects.toThrow("not configured");
     await expect(
       integrations.dispatch("fixture", "drift.render", { path: "report.json" }),
     ).rejects.toThrow("not configured");
