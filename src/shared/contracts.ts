@@ -137,7 +137,56 @@ export interface PreviewStatus {
   startedAt: string | null;
   finishedAt: string | null;
   error: string | null;
+  mode: "manual" | "automatic";
+  prompt: string;
+  sourceRevision: string | null;
+  generatedRevision: string | null;
+  sourceDirty: boolean;
+  stale: boolean;
+  automaticBlockedReason: string | null;
+  lastStrategy: "fresh" | "update" | null;
+  artifactGitTracked: boolean;
 }
+
+function hasLoneSurrogate(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const unit = value.charCodeAt(index);
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      if (index + 1 >= value.length) return true;
+      const next = value.charCodeAt(index + 1);
+      if (next < 0xdc00 || next > 0xdfff) return true;
+      index += 1;
+    } else if (unit >= 0xdc00 && unit <= 0xdfff) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export const PreviewPromptSchema = z
+  .string()
+  .refine((value) => !value.includes("\0"), "Preview prompt cannot contain a null byte")
+  .refine((value) => !hasLoneSurrogate(value), "Preview prompt cannot contain a lone surrogate")
+  .transform((value) => value.trim())
+  .pipe(z.string().max(8_000));
+
+export const PreviewGenerationRequestSchema = z
+  .object({
+    strategy: z.enum(["update", "fresh"]).default("update"),
+    prompt: PreviewPromptSchema.default(""),
+  })
+  .strict();
+
+export type PreviewGenerationRequest = z.infer<typeof PreviewGenerationRequestSchema>;
+
+export const PreviewSettingsRequestSchema = z
+  .object({
+    mode: z.enum(["manual", "automatic"]),
+    prompt: PreviewPromptSchema.default(""),
+  })
+  .strict();
+
+export type PreviewSettingsRequest = z.infer<typeof PreviewSettingsRequestSchema>;
 
 export const TreeForkRequestSchema = z
   .object({

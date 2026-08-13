@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { NotificationEventInputSchema, PluginManifestSchema } from "../src/shared/contracts";
+import {
+  NotificationEventInputSchema,
+  PluginManifestSchema,
+  PreviewGenerationRequestSchema,
+  PreviewSettingsRequestSchema,
+} from "../src/shared/contracts";
 import { DEVELOPMENT_CSP_NONCE_PLACEHOLDER } from "../src/shared/development";
 import { authorizePluginRequest } from "../src/web/plugin-authority";
 import viteConfig from "../vite.config";
@@ -60,11 +65,34 @@ describe("shared trust-boundary contracts", () => {
     expect(() => PluginManifestSchema.parse({ ...manifest, id: "terminal" })).toThrow();
   });
 
+  test("Preview browser authority is limited to mode, strategy, and a bounded prompt", () => {
+    expect(
+      PreviewGenerationRequestSchema.parse({ strategy: "update", prompt: "  Focus here.  " }),
+    ).toEqual({ strategy: "update", prompt: "Focus here." });
+    expect(PreviewSettingsRequestSchema.parse({ mode: "automatic", prompt: "" })).toEqual({
+      mode: "automatic",
+      prompt: "",
+    });
+    expect(() =>
+      PreviewGenerationRequestSchema.parse({ strategy: "fresh", prompt: "x".repeat(8_001) }),
+    ).toThrow();
+    expect(
+      PreviewGenerationRequestSchema.parse({ strategy: "fresh", prompt: ` ${"x".repeat(8_000)} ` }),
+    ).toEqual({ strategy: "fresh", prompt: "x".repeat(8_000) });
+    expect(() =>
+      PreviewGenerationRequestSchema.parse({ strategy: "fresh", prompt: "\ud800" }),
+    ).toThrow();
+    expect(() =>
+      PreviewSettingsRequestSchema.parse({ mode: "automatic", prompt: "", path: "/tmp" }),
+    ).toThrow();
+  });
+
   test("ecosystem build uses Preview's checkout-owned launcher", async () => {
     const source = await Bun.file(new URL("../scripts/build-ecosystem.ts", import.meta.url)).text();
     expect(source).toContain('resolve(checkouts.preview, "bin/preview")');
     expect(source).not.toContain('"uv", "run"');
     expect(source).toMatch(/"--artifact-root",\s+previewArtifacts/);
+    expect(source).toContain('"--git-track"');
     expect(source).toContain('...projectSources.flatMap(([id, path]) => ["--source", id, path])');
     expect(source).toContain('"in-progress-plugin/preview-index.json"');
     expect(source).toContain('"tree-complete.workspace"');
@@ -72,7 +100,8 @@ describe("shared trust-boundary contracts", () => {
   });
 
   test("Preview generation confirmation discloses the fixed paid boundary", async () => {
-    const { confirmPreviewGeneration } = await import("../src/web/preview-authority");
+    const { confirmPreviewAutomatic, confirmPreviewGeneration } =
+      await import("../src/web/preview-authority");
     const prompts: string[] = [];
     const accepted = confirmPreviewGeneration(
       {
@@ -87,8 +116,18 @@ describe("shared trust-boundary contracts", () => {
         startedAt: null,
         finishedAt: null,
         error: null,
+        mode: "manual",
+        prompt: "",
+        sourceRevision: "a".repeat(40),
+        generatedRevision: null,
+        sourceDirty: false,
+        stale: true,
+        automaticBlockedReason: null,
+        lastStrategy: null,
+        artifactGitTracked: true,
       },
       { id: "fixture", name: "Fixture" },
+      { strategy: "fresh", prompt: "Lead with the release workflow." },
       (message) => {
         prompts.push(message);
         return true;
@@ -96,7 +135,7 @@ describe("shared trust-boundary contracts", () => {
     );
 
     expect(accepted).toBe(true);
-    expect(prompts[0]).toMatch(/Generate Preview.*Fixture.*Project ID: fixture/s);
+    expect(prompts[0]).toMatch(/Regenerate Preview from scratch.*Fixture.*Project ID: fixture/s);
     expect(prompts[0]).toMatch(/gpt-5\.6-sol.*max/s);
     expect(prompts[0]).toMatch(/ChatGPT subscription.*subscription usage/s);
     expect(prompts[0]).toMatch(
@@ -109,6 +148,74 @@ describe("shared trust-boundary contracts", () => {
       /Repository instructions and skills are suppressed.*global ~\/\.codex\/AGENTS\.md.*trusted authority/s,
     );
     expect(prompts[0]).toContain("/external/preview");
+    expect(prompts[0]).toContain("Lead with the release workflow.");
+
+    const automatic = confirmPreviewAutomatic(
+      {
+        projectId: "fixture",
+        dashboard: true,
+        state: "idle",
+        activeProjectId: null,
+        model: "gpt-5.6-sol",
+        reasoningEffort: "max",
+        artifactDirectory: "/external/preview",
+        revision: 0,
+        startedAt: null,
+        finishedAt: null,
+        error: null,
+        mode: "manual",
+        prompt: "",
+        sourceRevision: "a".repeat(40),
+        generatedRevision: "9".repeat(40),
+        sourceDirty: false,
+        stale: true,
+        automaticBlockedReason: null,
+        lastStrategy: "update",
+        artifactGitTracked: true,
+      },
+      { id: "fixture", name: "Fixture" },
+      "Keep the evidence ledger compact.",
+      (message) => {
+        prompts.push(message);
+        return true;
+      },
+    );
+    expect(automatic).toBe(true);
+    expect(prompts[1]).toMatch(/ongoing subscription-spending.*new clean Git commit/s);
+    expect(prompts[1]).toMatch(/failed commit is not retried.*local Git repository/s);
+
+    prompts.length = 0;
+    confirmPreviewGeneration(
+      {
+        projectId: "fixture",
+        dashboard: true,
+        state: "idle",
+        activeProjectId: null,
+        model: "gpt-5.6-sol",
+        reasoningEffort: "max",
+        artifactDirectory: "/external/preview",
+        revision: 0,
+        startedAt: null,
+        finishedAt: null,
+        error: null,
+        mode: "automatic",
+        prompt: "Old direction.",
+        sourceRevision: "a".repeat(40),
+        generatedRevision: "a".repeat(40),
+        sourceDirty: false,
+        stale: false,
+        automaticBlockedReason: null,
+        lastStrategy: "update",
+        artifactGitTracked: true,
+      },
+      { id: "fixture", name: "Fixture" },
+      { strategy: "update", prompt: "New direction." },
+      (message) => {
+        prompts.push(message);
+        return false;
+      },
+    );
+    expect(prompts[0]).toMatch(/Automatic mode is active.*future runs at clean new commits/s);
   });
 
   test("ecosystem config exposes every plugin submodule as an editable project", async () => {

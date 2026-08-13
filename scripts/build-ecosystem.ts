@@ -60,6 +60,7 @@ const builds = [
       "plugin-build",
       "--artifact-root",
       previewArtifacts,
+      "--git-track",
       ...projectSources.flatMap(([id, path]) => ["--source", id, path]),
     ],
     env: {},

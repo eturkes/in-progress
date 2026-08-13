@@ -148,11 +148,21 @@ pnpm dev:ecosystem
 The build command compiles Drift, Preview, Tree Complete, and Turbo Prompt, then validates all five
 manifests with the host validator. Each submodule still owns its full native quality gate. Preview's
 published models, compiled dashboards, stages, locks, and aggregate plugin live under
-`~/.local/share/in-progress/preview`, disjoint from every configured project. Projects without a
-matching package display an explicit unavailable state. In the Preview view, **Generate Preview**
-creates that external dashboard; after a successful aggregate publish it becomes **Update Preview**
-and reloads the frame. Every activation receives a trusted host confirmation immediately before the
-subscription-spending request. The fixed invocation uses ChatGPT-authenticated Codex,
+`~/.local/share/in-progress/preview`, disjoint from every configured project. The build initializes
+that root as a standalone local Git repository; Preview commits validated bundles, generation records,
+and aggregate output after each successful package, configures no remote, and never pushes. Host status
+reads inventory and generation metadata from one atomically published private index, not a possibly
+newer loose record. Stages,
+locks, and recovery backups remain ignored. Projects without a matching package display an explicit
+unavailable state.
+
+In the Preview view, **Generate Preview** creates the external dashboard. **Update Preview** supplies
+the prior validated declarative model as continuity while re-verifying it against current source;
+**Regenerate from scratch** omits that prior context. A bounded project-specific direction can steer
+either path. Manual runs receive a trusted confirmation immediately before subscription spending.
+Automatic mode receives one explicit ongoing-authorization confirmation, creates a missing Preview,
+then runs at most once per new clean Git commit; dirty worktrees wait and failed commits do not loop.
+Successful aggregate publication reloads the frame. The fixed invocation uses ChatGPT-authenticated Codex,
 `gpt-5.6-sol`, `max` reasoning, a read-only OS sandbox, and at most one repair retry after a failed
 invocation or invalid/unreadable output. Each invocation can make multiple model requests and tool
 continuations. Codex can read any host-readable content, which may reach OpenAI; the sandbox prevents
@@ -160,6 +170,8 @@ writes but is not a confidentiality boundary. Project documents, repository skil
 servers, plugins, web search, and other external-capability tools are disabled for this bounded
 authoring run. The user-owned global `~/.codex/AGENTS.md` remains model-visible trusted authority.
 Project content remains untrusted data; the read-only shell remains available for source inspection.
+The experimental Codex app-server is intentionally outside this batch boundary: persistent threads
+would add hidden global state without improving commit detection, schema validation, or atomic publish.
 Publish every referenced plugin commit before publishing a parent commit that advances a gitlink.
 
 Tree Complete preview state lives under host-owned `.data/` and does not mutate project files or Git

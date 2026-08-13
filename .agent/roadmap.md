@@ -69,6 +69,28 @@ Browser + phone-ready personal agent control plane: durable project PTYs, projec
 - Model = `gpt-5.6-sol`; reasoning effort = `max`; authenticated local Codex CLI = sole provider path.
 - One project operation at a time; prior published dashboard survives generation/validation failure.
 
+## Preview commit lifecycle
+
+- [x] Evolve a validated prior dashboard by default; explicit fresh regeneration omits prior context.
+- [x] Accept one bounded Preview-specific prompt reused by manual + automatic runs.
+- [x] Persist per-project manual/automatic policy; automatic mode reacts only to clean new Git commits.
+- [x] Suppress repeat automatic spending after a failure at the same commit; retry on a new commit or
+      explicit manual action.
+- [x] Initialize the external artifact root as a local-only Git repository; snapshot validated bundles,
+      generation records, and aggregate output while excluding locks/stages/backups.
+- [x] Add trusted responsive controls + paid-boundary disclosures for update, fresh, and ongoing auto.
+- [x] Run Preview + host gates, desktop/mobile browser QA, adversarial review, cleanup, and scoped commits.
+
+### Commit-lifecycle invariants
+
+- Incremental context = prior validated declarative model + recorded source commit; fresh = current source
+  alone. Both publish atomically only after deterministic validation.
+- Automatic authorization is explicit and durable; dirty worktrees wait, unchanged/failed commits do not
+  spend again, and restart resumes comparison from artifact metadata + host policy.
+- Artifact Git has no configured remote and receives no push; target project repositories remain untouched.
+- Codex app-server remains outside this bounded batch path: experimental persistent threads add global
+  state/authority without improving commit detection, schema validation, or atomic publication.
+
 ## Frontier durable execution
 
 - [x] Boundary allocation → TypeScript/Bun UI, Kotlin/Restate policy, Rust effects, Quint model

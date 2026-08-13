@@ -2,6 +2,8 @@ import type {
   BootstrapDto,
   EventDto,
   PluginRpcRequest,
+  PreviewGenerationRequest,
+  PreviewSettingsRequest,
   PreviewStatus,
   TerminalSessionDto,
 } from "../shared/contracts";
@@ -43,7 +45,7 @@ export class ApiClient {
     return decode<T>(await fetch(url), true);
   }
 
-  async #mutation<T>(url: string, method: "POST" | "DELETE", body?: unknown): Promise<T> {
+  async #mutation<T>(url: string, method: "POST" | "PUT" | "DELETE", body?: unknown): Promise<T> {
     const headers = new Headers({ "x-in-progress-csrf": this.csrfToken });
     if (body !== undefined) headers.set("content-type", "application/json");
     const response = await fetch(url, {
@@ -120,10 +122,26 @@ export class ApiClient {
     return body.status;
   }
 
-  async generatePreview(projectId: string): Promise<PreviewStatus> {
+  async generatePreview(
+    projectId: string,
+    request: PreviewGenerationRequest,
+  ): Promise<PreviewStatus> {
     const body = await this.#mutation<{ status: PreviewStatus }>(
       `/api/projects/${encodeURIComponent(projectId)}/preview`,
       "POST",
+      request,
+    );
+    return body.status;
+  }
+
+  async configurePreview(
+    projectId: string,
+    request: PreviewSettingsRequest,
+  ): Promise<PreviewStatus> {
+    const body = await this.#mutation<{ status: PreviewStatus }>(
+      `/api/projects/${encodeURIComponent(projectId)}/preview`,
+      "PUT",
+      request,
     );
     return body.status;
   }

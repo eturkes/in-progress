@@ -5,6 +5,8 @@ import { z, ZodError } from "zod";
 import {
   NotificationEventInputSchema,
   PluginRpcRequestSchema,
+  PreviewGenerationRequestSchema,
+  PreviewSettingsRequestSchema,
   PushSubscriptionSchema,
   type BootstrapDto,
 } from "../shared/contracts";
@@ -71,7 +73,7 @@ export function createControlPlane(config: InProgressConfig, options: AppOptions
   const store = new StateStore(config.dataDir, options.memoryStore);
   const notifications = new NotificationService(store, config.notifications.vapidSubject);
   const projects = new ProjectRegistry(config.projects);
-  const preview = new PreviewService(config.integrations.preview, projects);
+  const preview = new PreviewService(config.integrations.preview, projects, store);
   const integrations = new IntegrationRegistry(config.integrations, projects, config.dataDir);
   const plugins = new PluginRegistry(config.pluginDirectories);
   const security = new SecurityGate(
@@ -215,11 +217,17 @@ export function createControlPlane(config: InProgressConfig, options: AppOptions
       const previewRoute = /^\/api\/projects\/([a-z][a-z0-9-]+)\/preview$/.exec(pathname);
       if (previewRoute && request.method === "GET") {
         security.requireSession(request);
-        return api({ status: preview.status(previewRoute[1]!) });
+        return api({ status: await preview.status(previewRoute[1]!) });
       }
       if (previewRoute && request.method === "POST") {
         security.assertBrowserMutation(request);
-        return api({ status: preview.start(previewRoute[1]!) }, { status: 202 });
+        const input = PreviewGenerationRequestSchema.parse(await jsonBody(request));
+        return api({ status: await preview.start(previewRoute[1]!, input) }, { status: 202 });
+      }
+      if (previewRoute && request.method === "PUT") {
+        security.assertBrowserMutation(request);
+        const input = PreviewSettingsRequestSchema.parse(await jsonBody(request));
+        return api({ status: await preview.configure(previewRoute[1]!, input) });
       }
 
       const sessionRoute = /^\/api\/projects\/([a-z][a-z0-9-]+)\/sessions\/([0-9a-f-]+)$/.exec(

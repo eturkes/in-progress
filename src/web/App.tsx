@@ -16,7 +16,6 @@ import {
   Menu,
   Monitor,
   Moon,
-  RefreshCw,
   Search,
   Sparkles,
   SquareTerminal,
@@ -48,9 +47,10 @@ import { moveRovingTab, trapTab } from "./a11y";
 import { ApiClient, bootstrap } from "./api";
 import { NotificationCenter, useEventFeed } from "./components/Notifications";
 import { PluginFrame, type PluginStatus } from "./components/PluginFrame";
+import { PreviewControls } from "./components/PreviewControls";
 import { SortableList } from "./components/SortableList";
 import { applyStoredOrder, moveItem, parseStoredOrder } from "./order";
-import { confirmPreviewGeneration } from "./preview-authority";
+import { confirmPreviewAutomatic, confirmPreviewGeneration } from "./preview-authority";
 import { useTheme } from "./ThemeProvider";
 import type { ThemePreference } from "./theme";
 
@@ -213,6 +213,8 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
   const [previewStatuses, setPreviewStatuses] = useState<Record<string, PreviewStatus>>({});
   const [previewErrors, setPreviewErrors] = useState<Record<string, string>>({});
   const [previewStarting, setPreviewStarting] = useState<string | null>(null);
+  const [previewSaving, setPreviewSaving] = useState<string | null>(null);
+  const [previewDrafts, setPreviewDrafts] = useState<Record<string, string>>({});
   const [previewFrameRevisions, setPreviewFrameRevisions] = useState<Record<string, number>>({});
   const toastCounter = useRef(0);
   const previewSnapshots = useRef<Record<string, PreviewStatus>>({});
@@ -433,6 +435,9 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
         const prior = previewSnapshots.current[projectId];
         previewSnapshots.current[projectId] = next;
         setPreviewStatuses((current) => ({ ...current, [projectId]: next }));
+        setPreviewDrafts((current) =>
+          Object.hasOwn(current, projectId) ? current : { ...current, [projectId]: next.prompt },
+        );
         setPreviewErrors((current) => {
           if (!(projectId in current)) return current;
           const updated = { ...current };
@@ -468,29 +473,72 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
     };
   }, [api, plugin?.id, project, showToast]);
 
-  const runPreview = useCallback(async () => {
-    if (!project || plugin?.id !== "preview") return;
-    if (previewErrors[project.id]) return;
-    const status = previewStatuses[project.id];
-    if (!status) return;
-    if (!confirmPreviewGeneration(status, project, window.confirm.bind(window))) return;
-    previewRequestEpochs.current[project.id] = (previewRequestEpochs.current[project.id] ?? 0) + 1;
-    setPreviewStarting(project.id);
-    try {
-      const next = await api.generatePreview(project.id);
+  const runPreview = useCallback(
+    async (strategy: "update" | "fresh") => {
+      if (!project || plugin?.id !== "preview") return;
+      if (previewErrors[project.id]) return;
+      const status = previewStatuses[project.id];
+      if (!status) return;
+      const request = { strategy, prompt: previewDrafts[project.id] ?? status.prompt };
+      if (!confirmPreviewGeneration(status, project, request, window.confirm.bind(window))) return;
       previewRequestEpochs.current[project.id] =
         (previewRequestEpochs.current[project.id] ?? 0) + 1;
-      previewSnapshots.current[project.id] = next;
-      setPreviewStatuses((current) => ({ ...current, [project.id]: next }));
-      showToast(`${next.dashboard ? "Updating" : "Generating"} Preview dashboard`);
-    } catch (generationError) {
-      previewRequestEpochs.current[project.id] =
-        (previewRequestEpochs.current[project.id] ?? 0) + 1;
-      showToast(friendlyError(generationError), "danger");
-    } finally {
-      setPreviewStarting((current) => (current === project.id ? null : current));
-    }
-  }, [api, plugin?.id, previewErrors, previewStatuses, project, showToast]);
+      setPreviewStarting(project.id);
+      try {
+        const next = await api.generatePreview(project.id, request);
+        previewRequestEpochs.current[project.id] =
+          (previewRequestEpochs.current[project.id] ?? 0) + 1;
+        previewSnapshots.current[project.id] = next;
+        setPreviewStatuses((current) => ({ ...current, [project.id]: next }));
+        setPreviewDrafts((current) => ({ ...current, [project.id]: next.prompt }));
+        showToast(
+          strategy === "fresh"
+            ? "Regenerating Preview from scratch"
+            : `${next.dashboard ? "Updating" : "Generating"} Preview dashboard`,
+        );
+      } catch (generationError) {
+        previewRequestEpochs.current[project.id] =
+          (previewRequestEpochs.current[project.id] ?? 0) + 1;
+        showToast(friendlyError(generationError), "danger");
+      } finally {
+        setPreviewStarting((current) => (current === project.id ? null : current));
+      }
+    },
+    [api, plugin?.id, previewDrafts, previewErrors, previewStatuses, project, showToast],
+  );
+
+  const savePreviewSettings = useCallback(
+    async (mode: "manual" | "automatic") => {
+      if (!project || plugin?.id !== "preview") return;
+      if (previewErrors[project.id]) return;
+      const status = previewStatuses[project.id];
+      if (!status) return;
+      const prompt = previewDrafts[project.id] ?? status.prompt;
+      if (
+        mode === "automatic" &&
+        !confirmPreviewAutomatic(status, project, prompt, window.confirm.bind(window))
+      ) {
+        return;
+      }
+      setPreviewSaving(project.id);
+      try {
+        const next = await api.configurePreview(project.id, { mode, prompt });
+        previewSnapshots.current[project.id] = next;
+        setPreviewStatuses((current) => ({ ...current, [project.id]: next }));
+        setPreviewDrafts((current) => ({ ...current, [project.id]: next.prompt }));
+        showToast(
+          mode === "automatic"
+            ? "Automatic Preview updates enabled"
+            : "Preview set to manual updates",
+        );
+      } catch (settingsError) {
+        showToast(friendlyError(settingsError), "danger");
+      } finally {
+        setPreviewSaving((current) => (current === project.id ? null : current));
+      }
+    },
+    [api, plugin?.id, previewDrafts, previewErrors, previewStatuses, project, showToast],
+  );
 
   useEffect(() => {
     document.title =
@@ -511,6 +559,8 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
   }
 
   const shortcutModifier = navigator.platform.includes("Mac") ? "⌘" : "Ctrl";
+  const previewStatus = previewStatuses[project.id];
+  const previewDraft = previewDrafts[project.id] ?? previewStatus?.prompt ?? "";
 
   return (
     <div className={`control-plane ${railCollapsed ? "rail-is-collapsed" : ""}`}>
@@ -746,40 +796,20 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
           </div>
           <div className="host-actions">
             {plugin.id === "preview" ? (
-              <button
-                type="button"
-                className={`preview-button ${previewStatuses[project.id]?.state === "generating" ? "is-busy" : ""}`}
-                disabled={
-                  !previewStatuses[project.id] ||
-                  Boolean(previewErrors[project.id]) ||
-                  previewStarting === project.id ||
-                  previewStatuses[project.id]?.activeProjectId !== null
+              <PreviewControls
+                key={project.id}
+                project={project}
+                status={previewStatus}
+                error={previewErrors[project.id]}
+                draft={previewDraft}
+                starting={previewStarting === project.id}
+                saving={previewSaving === project.id}
+                onDraft={(value) =>
+                  setPreviewDrafts((current) => ({ ...current, [project.id]: value }))
                 }
-                onClick={() => void runPreview()}
-                title={
-                  previewErrors[project.id] ??
-                  previewStatuses[project.id]?.error ??
-                  "Generate or update this project's external Preview dashboard"
-                }
-              >
-                {previewStatuses[project.id]?.dashboard ? (
-                  <RefreshCw size={15} aria-hidden="true" />
-                ) : (
-                  <Sparkles size={15} aria-hidden="true" />
-                )}
-                <span>
-                  {previewErrors[project.id]
-                    ? "Preview unavailable"
-                    : previewStarting === project.id ||
-                        previewStatuses[project.id]?.state === "generating"
-                      ? "Generating…"
-                      : previewStatuses[project.id]?.activeProjectId
-                        ? "Preview busy"
-                        : previewStatuses[project.id]?.dashboard
-                          ? "Update Preview"
-                          : "Generate Preview"}
-                </span>
-              </button>
+                onRun={(strategy) => void runPreview(strategy)}
+                onSave={(mode) => void savePreviewSettings(mode)}
+              />
             ) : null}
             <button
               type="button"

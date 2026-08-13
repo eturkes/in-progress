@@ -389,14 +389,20 @@ packaged dashboard matching its host-bound project ID. Trusted React host chrome
 **Generate Preview** / **Update Preview** button and calls fixed project routes directly; plugin code
 cannot originate, alter, or replay this authority through RPC.
 
-Immediately before POST, the host confirmation names the project, external destination,
-ChatGPT-subscription use, `gpt-5.6-sol`, `max`, the failed/invalid-output repair retry, and the
-host-readable-content disclosure. It also states that repository instructions/skills are suppressed
-while the user-owned global Codex instructions remain trusted authority. The request carries no body.
-The server fixes the canonical source and all argv, admits one aggregate-changing job globally, polls
-status, preserves the prior aggregate on failure, and remounts the no-store iframe only after successful
-atomic packaging. Dashboard state is derived from a private, strict, sorted aggregate index rather than
-untrusted iframe status text.
+Manual POST confirmation names the project, update/fresh strategy, bounded Preview direction, external
+destination, ChatGPT-subscription use, `gpt-5.6-sol`, `max`, repair retry, and host-readable-content
+disclosure. Enabling automatic mode confirms ongoing spending once; the host then admits one run per
+new clean Git commit and suppresses retries for the same failed revision. Repository instructions/skills
+remain suppressed while global Codex instructions remain trusted authority. Request bodies can select
+only `update|fresh`, the bounded direction, or `manual|automatic`; the server fixes source, executable,
+model, effort, sandbox, destination, and remaining argv.
+
+Update supplies the prior validated model path plus recorded source revision to an ephemeral Codex run;
+fresh omits both. The server admits one aggregate-changing job globally, polls status, preserves the prior
+aggregate on failure, and remounts the no-store iframe only after successful atomic packaging. The
+external artifact root is a local-only Git repository containing validated publishes, generation records,
+and aggregate output; the tool defines no remote/push path. Dashboard state is derived from a private,
+strict, sorted aggregate index rather than untrusted iframe status text.
 
 ## Compatibility rules
 

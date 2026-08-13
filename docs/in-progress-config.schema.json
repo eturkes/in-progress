@@ -111,7 +111,7 @@
             "artifactDirectory": {
               "type": "string",
               "minLength": 1,
-              "description": "Existing Preview state/output root, disjoint from every configured project."
+              "description": "Existing Preview state/output root, disjoint from every configured project; ecosystem build initializes its local-only Git history."
             },
             "codexExecutable": {
               "type": "string",

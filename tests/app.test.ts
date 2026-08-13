@@ -216,9 +216,19 @@ describe("HTTP bootstrap and terminal authorization", () => {
       expect(
         (await fetch(`${guardedOrigin}/api/projects/fixture/preview`, { method: "POST" })).status,
       ).toBe(403);
+      const configured = await fetch(`${guardedOrigin}/api/projects/fixture/preview`, {
+        headers: { ...headers, "content-type": "application/json" },
+        method: "PUT",
+        body: JSON.stringify({ mode: "manual", prompt: "Lead with the execution path." }),
+      });
+      expect(configured.status).toBe(200);
+      expect(await configured.json()).toMatchObject({
+        status: { mode: "manual", prompt: "Lead with the execution path." },
+      });
       const started = await fetch(`${guardedOrigin}/api/projects/fixture/preview`, {
-        headers,
+        headers: { ...headers, "content-type": "application/json" },
         method: "POST",
+        body: JSON.stringify({ strategy: "fresh", prompt: "Focus on release readiness." }),
       });
       expect(started.status).toBe(202);
       expect(await started.json()).toMatchObject({ status: { state: "generating" } });
@@ -234,6 +244,12 @@ describe("HTTP bootstrap and terminal authorization", () => {
         await Bun.sleep(10);
       }
       expect(status).toMatchObject({ dashboard: true, state: "idle" });
+      const final = await fetch(`${guardedOrigin}/api/projects/fixture/preview`, {
+        headers: { cookie: session },
+      });
+      expect(await final.json()).toMatchObject({
+        status: { prompt: "Focus on release readiness." },
+      });
     } finally {
       await guarded.close();
       removeDirectory(fixture);

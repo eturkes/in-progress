@@ -83,8 +83,13 @@ external generate/package operation; Tree Complete loads one built embedded serv
 project with host-fixed project/data roots and runner mode. Static plugin manifests grant access to
 named read methods but cannot configure code, argv, paths, models, or mode. Preview remains
 capability-free: trusted host chrome owns its button, disclosure confirmation, CSRF mutation, async
-job, and frame remount. Its CLI fixes ChatGPT auth, `gpt-5.6-sol`, `max`, a read-only OS sandbox, structured
-output validation, and atomic external publication. Tree fork mutation separately crosses a trusted
+job, commit-triggered automatic policy, and frame remount. Its CLI fixes ChatGPT auth, `gpt-5.6-sol`,
+`max`, a read-only OS sandbox, structured output validation, and atomic external publication. Update
+runs explicitly reference the prior validated model; fresh runs omit it. Validated artifacts enter a
+standalone local Git history with no configured remote or push operation. Persistent Codex app-server
+threads remain outside this bounded path: continuity is explicit artifact input rather than hidden global
+session state. Inventory + generation metadata publish in one private aggregate index, preventing status
+from combining a newer loose bundle record with an older aggregate after packaging failure. Tree fork mutation separately crosses a trusted
 confirmation containing configured mode and validated fork IDs.
 
 `POST /api/projects/:project/sessions` creates:
@@ -147,24 +152,25 @@ Bootstrap establishes or refreshes the session; other read endpoints and plugin 
 
 Core routes:
 
-| Route                                             | Purpose                              |
-| ------------------------------------------------- | ------------------------------------ |
-| `GET /api/bootstrap`                              | session + navigation/bootstrap model |
-| `GET /api/projects/:id/sessions`                  | list in-memory PTYs                  |
-| `POST /api/projects/:id/sessions`                 | create PTY                           |
-| `DELETE /api/projects/:id/sessions/:sid`          | terminate PTY                        |
-| `POST …/:sid/ticket`                              | mint one-use WebSocket ticket        |
-| `GET /api/projects/:id/preview`                   | external dashboard/job status        |
-| `POST /api/projects/:id/preview`                  | start fixed Preview generate/update  |
-| `GET /api/events`                                 | latest 100 inbox events              |
-| `GET /api/events/stream`                          | live SSE + 20-second heartbeat       |
-| `POST /api/events/:id/read`                       | mark event read                      |
-| `POST /api/plugins/:plugin/projects/:project/rpc` | capability broker                    |
-| `POST/DELETE /api/notifications/subscriptions`    | manage browser push subscription     |
-| `POST /api/notifications/test`                    | test inbox + push                    |
-| `POST /api/hooks/notify`                          | terminal/agent bearer hook           |
-| `GET /plugins/:id/`                               | authenticated plugin entry document  |
-| `GET /healthz`                                    | process health/version               |
+| Route                                             | Purpose                               |
+| ------------------------------------------------- | ------------------------------------- |
+| `GET /api/bootstrap`                              | session + navigation/bootstrap model  |
+| `GET /api/projects/:id/sessions`                  | list in-memory PTYs                   |
+| `POST /api/projects/:id/sessions`                 | create PTY                            |
+| `DELETE /api/projects/:id/sessions/:sid`          | terminate PTY                         |
+| `POST …/:sid/ticket`                              | mint one-use WebSocket ticket         |
+| `GET /api/projects/:id/preview`                   | external dashboard/job status         |
+| `POST /api/projects/:id/preview`                  | start Preview update/fresh generation |
+| `PUT /api/projects/:id/preview`                   | set Preview manual/automatic + prompt |
+| `GET /api/events`                                 | latest 100 inbox events               |
+| `GET /api/events/stream`                          | live SSE + 20-second heartbeat        |
+| `POST /api/events/:id/read`                       | mark event read                       |
+| `POST /api/plugins/:plugin/projects/:project/rpc` | capability broker                     |
+| `POST/DELETE /api/notifications/subscriptions`    | manage browser push subscription      |
+| `POST /api/notifications/test`                    | test inbox + push                     |
+| `POST /api/hooks/notify`                          | terminal/agent bearer hook            |
+| `GET /plugins/:id/`                               | authenticated plugin entry document   |
+| `GET /healthz`                                    | process health/version                |
 
 ## Plugins
 

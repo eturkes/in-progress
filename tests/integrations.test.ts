@@ -144,6 +144,24 @@ describe("fixed integration adapters", () => {
     expect(leaked).toBe(false);
   });
 
+  test("delivers bounded subprocess input without exposing it through argv", async () => {
+    const directory = root("integration-stdin");
+    const executable = join(directory, "stdin-tool");
+    writeFileSync(executable, "#!/bin/sh\nprintf 'argv=%s\\n' \"$#\"\ncat\n");
+    chmodSync(executable, 0o755);
+
+    await expect(
+      runBounded([executable], {
+        cwd: directory,
+        env: { PATH: "/usr/bin:/bin" },
+        timeoutMs: 2_000,
+        stdoutBytes: 1_024,
+        label: "Input fixture",
+        stdin: "Preview-only direction\n",
+      }),
+    ).resolves.toEqual({ stdout: "argv=0\nPreview-only direction\n", stderr: "" });
+  });
+
   test("maps Align's verified status document to a bounded plugin DTO", async () => {
     const { integrations, projectRoot } = fixture();
 

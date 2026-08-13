@@ -162,8 +162,11 @@ Adding a plugin directory is a security decision. Review its manifest and built 
   cannot choose commands, roots, models, or mutating analyzer operations.
 - Preview executable, Codex executable, selected canonical project, external artifact root, model,
   effort, sandbox, schema, and aggregate source map come only from canonical host configuration and
-  code. The browser sends no path/model/options. Its trusted host button confirms disclosure and
-  subscription use immediately before a CSRF-protected request. The CLI removes API credential
+  code. The browser can send only a bounded direction plus update/fresh and manual/automatic enums;
+  it sends no path, executable, model, sandbox, or destination. Manual actions confirm disclosure and
+  subscription use immediately before a CSRF-protected request. Enabling automatic mode explicitly
+  authorizes future runs, which require a new clean Git commit and suppress repeated spending after
+  one failure at that revision. The CLI removes API credential
   environment overrides, requires stored ChatGPT auth plus provider/WebSocket reachability, pins
   `gpt-5.6-sol` + `max`, and gives Codex a read-only OS sandbox. Generated/staged/plugin files remain
   in an artifact root canonicalized as disjoint from every configured project. Codex may read any
@@ -173,6 +176,9 @@ Adding a plugin directory is a security decision. Review its manifest and built 
   shell needed for source inspection. The user-owned global `~/.codex/AGENTS.md` remains
   model-visible trusted authority. Shutdown kills Codex's detached process group; this is not
   cgroup/PID-namespace containment for a subprocess that deliberately creates a new session.
+  Successful external bundles, bounded generation records, and aggregate bytes are staged into an
+  artifact-root-local Git repository with ignored locks/stages/backups. Preview creates no remote and
+  invokes no network Git operation; target project Git metadata is read-only.
 - Tree Complete is an explicitly configured host integration, not an arbitrary plugin backend. Its
   embedded service receives the selected canonical project, a host-owned private data directory,
   and the configured preview/Codex mode. RPC exposes only workspace retrieval and three fork IDs;

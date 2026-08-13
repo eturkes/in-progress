@@ -34,9 +34,22 @@ function emptyGitSummary(available = false): GitSummary {
   };
 }
 
+interface ProjectGitState {
+  summary: GitSummary;
+  revision: string | null;
+}
+
 export class ProjectRegistry {
   readonly #projects: Map<string, ProjectConfig>;
-  readonly #gitCache = new Map<string, { expiresAt: number; value: Promise<GitSummary> }>();
+  readonly #gitCache = new Map<
+    string,
+    {
+      expiresAt: number;
+      value: Promise<ProjectGitState>;
+      summary: Promise<GitSummary>;
+      revision: Promise<string | null>;
+    }
+  >();
 
   constructor(projects: ProjectConfig[]) {
     this.#projects = new Map(projects.map((project) => [project.id, project]));
@@ -72,15 +85,33 @@ export class ProjectRegistry {
   }
 
   git(id: string): Promise<GitSummary> {
-    const project = this.get(id);
-    const cached = this.#gitCache.get(id);
-    if (cached && cached.expiresAt > Date.now()) return cached.value;
-    const value = this.#readGit(project);
-    this.#gitCache.set(id, { expiresAt: Date.now() + 2_000, value });
-    return value;
+    return this.#gitState(id).summary;
   }
 
-  async #readGit(project: ProjectConfig): Promise<GitSummary> {
+  gitRevision(id: string): Promise<string | null> {
+    return this.#gitState(id).revision;
+  }
+
+  #gitState(id: string): {
+    value: Promise<ProjectGitState>;
+    summary: Promise<GitSummary>;
+    revision: Promise<string | null>;
+  } {
+    const project = this.get(id);
+    const cached = this.#gitCache.get(id);
+    if (cached && cached.expiresAt > Date.now()) return cached;
+    const value = this.#readGit(project);
+    const entry = {
+      expiresAt: Date.now() + 2_000,
+      value,
+      summary: value.then((state) => state.summary),
+      revision: value.then((state) => state.revision),
+    };
+    this.#gitCache.set(id, entry);
+    return entry;
+  }
+
+  async #readGit(project: ProjectConfig): Promise<ProjectGitState> {
     let stdout: string;
     try {
       ({ stdout } = await runBounded(
@@ -104,12 +135,16 @@ export class ProjectRegistry {
         },
       ));
     } catch {
-      return emptyGitSummary();
+      return { summary: emptyGitSummary(), revision: null };
     }
 
     const summary = emptyGitSummary(true);
+    let revision: string | null = null;
     for (const line of stdout.split("\n")) {
-      if (line.startsWith("# branch.head ")) summary.branch = line.slice(14).trim();
+      if (line.startsWith("# branch.oid ")) {
+        const candidate = line.slice(13).trim();
+        if (/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(candidate)) revision = candidate;
+      } else if (line.startsWith("# branch.head ")) summary.branch = line.slice(14).trim();
       else if (line.startsWith("# branch.upstream ")) summary.upstream = line.slice(18).trim();
       else if (line.startsWith("# branch.ab ")) {
         const match = /\+(\d+) -(\d+)/.exec(line);
@@ -123,7 +158,7 @@ export class ProjectRegistry {
       }
     }
     summary.clean = summary.staged + summary.modified + summary.untracked === 0;
-    return summary;
+    return { summary, revision };
   }
 
   async tree(id: string, rawParams: unknown): Promise<ProjectTreeEntry[]> {

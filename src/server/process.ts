@@ -55,6 +55,7 @@ export async function runBounded(
     stdoutBytes: number;
     label: string;
     signal?: AbortSignal;
+    stdin?: string;
   },
 ): Promise<ProcessResult> {
   let child: ReturnType<typeof Bun.spawn>;
@@ -63,7 +64,7 @@ export async function runBounded(
       cwd: options.cwd,
       detached: true,
       env: options.env,
-      stdin: "ignore",
+      stdin: options.stdin === undefined ? "ignore" : "pipe",
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -109,6 +110,16 @@ export async function runBounded(
   options.signal?.addEventListener("abort", abort, { once: true });
   if (options.signal?.aborted) abort();
   try {
+    if (options.stdin !== undefined) {
+      try {
+        if (!child.stdin || typeof child.stdin === "number") throw new Error();
+        child.stdin.write(options.stdin);
+        child.stdin.end();
+      } catch {
+        hardStop();
+        throw new HttpError(502, `${options.label} input could not be written`);
+      }
+    }
     if (!(child.stdout instanceof ReadableStream) || !(child.stderr instanceof ReadableStream)) {
       hardStop();
       throw new HttpError(502, `${options.label} process pipes were unavailable`);
