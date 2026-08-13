@@ -55,7 +55,8 @@
       "pythonExecutable": "/usr/bin/python3"
     },
     "drift": {
-      "executable": "./plugins/drift/target/release/drift"
+      "executable": "./plugins/drift/target/release/drift",
+      "sessionsDirectory": "~/.codex/sessions"
     },
     "preview": {
       "sourceDirectory": "./plugins/preview",

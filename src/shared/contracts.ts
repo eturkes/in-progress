@@ -20,6 +20,8 @@ export const PluginCapabilitySchema = z.enum([
   "align.status",
   "drift.render",
   "drift.validateTraces",
+  "drift.recentSessions",
+  "drift.importSession",
   "drift.analyze",
   "tree-complete.workspace",
   "tree-complete.createFork",
@@ -218,6 +220,38 @@ export interface DriftValidatedTraces {
   paths: string[];
 }
 
+export const DriftCodexSessionIdSchema = z
+  .string()
+  .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+
+export const DriftImportSessionRequestSchema = z
+  .object({ sessionId: DriftCodexSessionIdSchema })
+  .strict();
+
+export type DriftImportSessionRequest = z.infer<typeof DriftImportSessionRequestSchema>;
+
+export interface DriftCodexSession {
+  id: string;
+  startedAt: string;
+  updatedAt: string;
+  source: string;
+  byteSize: number;
+}
+
+export interface DriftRecentSessions {
+  sessions: DriftCodexSession[];
+  truncated: boolean;
+}
+
+export interface DriftImportedSession {
+  path: string;
+  session: DriftCodexSession;
+}
+
+export function driftSessionTracePath(sessionId: string): string {
+  return `.drift/traces/codex-${sessionId}.drift.jsonl`;
+}
+
 export function driftReportPath(tracePath: string): string {
   const basename = tracePath.split("/").at(-1) ?? "trace.jsonl";
   const stem = basename.replace(/\.jsonl$/i, "");
@@ -282,6 +316,8 @@ export const PluginRpcRequestSchema = z
       "align.status",
       "drift.render",
       "drift.validateTraces",
+      "drift.recentSessions",
+      "drift.importSession",
       "drift.analyze",
       "tree-complete.workspace",
       "tree-complete.createFork",

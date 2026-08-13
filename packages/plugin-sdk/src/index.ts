@@ -9,6 +9,8 @@ export type Capability =
   | "align.status"
   | "drift.render"
   | "drift.validateTraces"
+  | "drift.recentSessions"
+  | "drift.importSession"
   | "drift.analyze"
   | "tree-complete.workspace"
   | "tree-complete.createFork";
@@ -87,6 +89,24 @@ export interface DriftValidatedTraces {
   paths: string[];
 }
 
+export interface DriftCodexSession {
+  id: string;
+  startedAt: string;
+  updatedAt: string;
+  source: string;
+  byteSize: number;
+}
+
+export interface DriftRecentSessions {
+  sessions: DriftCodexSession[];
+  truncated: boolean;
+}
+
+export interface DriftImportedSession {
+  path: string;
+  session: DriftCodexSession;
+}
+
 export type EventKind = "needs-input" | "completed" | "failed" | "system";
 
 export interface NotificationInput {
@@ -118,6 +138,11 @@ export interface PluginMethodMap {
   "drift.validateTraces": {
     params: { paths: string[] };
     result: DriftValidatedTraces;
+  };
+  "drift.recentSessions": { params: undefined; result: DriftRecentSessions };
+  "drift.importSession": {
+    params: { sessionId: string };
+    result: DriftImportedSession;
   };
   "drift.analyze": { params: { path: string }; result: DriftRender };
   "tree-complete.workspace": { params: undefined; result: unknown };
@@ -189,7 +214,8 @@ export class InProgressClient {
     }
     const params = args[0];
     const id = crypto.randomUUID();
-    const timeoutMs = method === "drift.analyze" ? 21 * 60_000 : 15_000;
+    const timeoutMs =
+      method === "drift.analyze" ? 21 * 60_000 : method === "drift.importSession" ? 75_000 : 15_000;
     return new Promise<PluginMethodMap[M]["result"]>((resolve, reject) => {
       const timer = window.setTimeout(() => {
         this.#pending.delete(id);

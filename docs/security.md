@@ -136,7 +136,7 @@ The only authority is one accepted `MessagePort` for one plugin + selected proje
 - reuses one random init nonce, accepts the first matching reply, and closes every other attempt;
 - validates every message shape and timeout;
 - checks the manifest capability on every method;
-- validates Drift's trace path and Tree Complete's three fork IDs before showing operation-specific
+- validates Drift's trace path/session ID and Tree Complete's three fork IDs before showing operation-specific
   trusted-host confirmation with stable plugin/project IDs immediately before every privileged request;
 - takes project identity from trusted frame state, never plugin parameters;
 - validates/canonicalizes paths again server-side;
@@ -161,7 +161,13 @@ Adding a plugin directory is a security decision. Review its manifest and built 
   accepts only exact bounded intent over stdin; root/name, authority, stage, executable, and argv stay
   host-fixed. It confirms immediately before creating project-local `.align`, serializes setup per
   project, rejects verified initialized state, and returns only freshly verified projected status.
-  Drift rendering remains read-only. Its privileged analyzer accepts only one bounded
+  Drift rendering remains read-only. Recent-session discovery scans only the configured canonical
+  Codex rollout root, returns bounded metadata for top-level sessions whose recorded cwd resolves to
+  the selected project, and rejects symlinked, malformed, oversized, foreign, or ambiguous inputs.
+  Confirmed import accepts only one UUID; the host re-resolves it, fixes native adapter/output/argv,
+  stages beneath real `.drift/traces/`, revalidates, and atomically publishes mode-`0600` output while
+  preserving prior output on failure. Import is model-free and excludes hidden reasoning/system
+  context; analysis retains its own disclosure confirmation. Its privileged analyzer accepts one bounded
   project-relative `.jsonl` path after confirmation names trace, derived output, model disclosure,
   and create/replace behavior. A separate bounded read-only adapter returns only project paths accepted
   by native `drift validate`, so arbitrary JSONL cannot enable the action. The server canonicalizes and
@@ -171,7 +177,7 @@ Adding a plugin directory is a security decision. Review its manifest and built 
   Codex in its read-only observer workspace, atomically writes mode-`0600` output, and revalidates it
   before return. Trace content reaches OpenAI and remains embedded in the report. Both adapters use
   fixed argv, detached process groups, hard deadlines, output caps, UTF-8/schema checks, and no shell.
-  Plugins cannot choose commands, roots, models, output paths, or arbitrary analyzer options.
+  Plugins cannot choose source paths, commands, roots, models, output paths, or arbitrary analyzer options.
 - Preview executable, Codex executable, selected canonical project, external artifact root, model,
   effort, sandbox, schema, and aggregate source map come only from canonical host configuration and
   code. The browser can send only a bounded direction plus update/fresh and manual/automatic enums;

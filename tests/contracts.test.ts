@@ -2,12 +2,14 @@ import { describe, expect, test } from "bun:test";
 import {
   AlignSetupRequestSchema,
   DriftAnalyzeRequestSchema,
+  DriftImportSessionRequestSchema,
   DriftValidateTracesRequestSchema,
   NotificationEventInputSchema,
   PluginManifestSchema,
   PreviewGenerationRequestSchema,
   PreviewSettingsRequestSchema,
   driftReportPath,
+  driftSessionTracePath,
 } from "../src/shared/contracts";
 import { DEVELOPMENT_CSP_NONCE_PLACEHOLDER } from "../src/shared/development";
 import { developmentProxyTarget } from "../src/server/app";
@@ -142,6 +144,16 @@ describe("shared trust-boundary contracts", () => {
       DriftValidateTracesRequestSchema.parse({
         paths: Array.from({ length: 33 }, (_, index) => `trace-${index}.jsonl`),
       }),
+    ).toThrow();
+  });
+
+  test("Drift Codex import accepts one opaque session id and derives its private trace path", () => {
+    const sessionId = "019ff5d2-ba6d-7592-82bd-e2de3a418790";
+    expect(DriftImportSessionRequestSchema.parse({ sessionId })).toEqual({ sessionId });
+    expect(driftSessionTracePath(sessionId)).toBe(`.drift/traces/codex-${sessionId}.drift.jsonl`);
+    expect(() => DriftImportSessionRequestSchema.parse({ sessionId: "../rollout" })).toThrow();
+    expect(() =>
+      DriftImportSessionRequestSchema.parse({ sessionId, path: "/tmp/rollout.jsonl" }),
     ).toThrow();
   });
 
@@ -451,6 +463,51 @@ describe("shared trust-boundary contracts", () => {
         confirm,
       ),
     ).toEqual({ allowed: false, error: "Invalid Drift trace request" });
+    expect(prompts).toHaveLength(0);
+  });
+
+  test("Drift Codex import requires trusted local-read and project-write confirmation", () => {
+    const prompts: string[] = [];
+    const confirm = (message: string) => {
+      prompts.push(message);
+      return false;
+    };
+    const sessionId = "019ff5d2-ba6d-7592-82bd-e2de3a418790";
+
+    expect(
+      authorizePluginRequest(
+        "drift.importSession",
+        { sessionId },
+        "Drift",
+        "drift",
+        "Fixture",
+        "fixture",
+        "preview",
+        confirm,
+      ),
+    ).toEqual({ allowed: false, error: "Drift session import canceled by the user" });
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toMatch(/Plugin: Drift.*Project: Fixture/s);
+    expect(prompts[0]).toMatch(
+      new RegExp(`Codex session: ${sessionId}.*${driftSessionTracePath(sessionId)}`, "s"),
+    );
+    expect(prompts[0]).toMatch(/outside the project.*creates or replaces.*private trace/s);
+    expect(prompts[0]).toMatch(/messages and tool inputs\/outputs.*personal data.*secrets/s);
+    expect(prompts[0]).toMatch(/local-only.*does not contact.*separate confirmed action/s);
+
+    prompts.length = 0;
+    expect(
+      authorizePluginRequest(
+        "drift.importSession",
+        { sessionId: "../outside", path: "/tmp/source" },
+        "Drift",
+        "drift",
+        "Fixture",
+        "fixture",
+        "preview",
+        confirm,
+      ),
+    ).toEqual({ allowed: false, error: "Invalid Codex session import request" });
     expect(prompts).toHaveLength(0);
   });
 

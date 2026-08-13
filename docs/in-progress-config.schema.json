@@ -101,6 +101,12 @@
               "minLength": 1,
               "default": "/usr/bin/codex",
               "description": "Authenticated Codex CLI used only for confirmed Drift trace analysis."
+            },
+            "sessionsDirectory": {
+              "type": "string",
+              "minLength": 1,
+              "default": "~/.codex/sessions",
+              "description": "Existing Codex rollout root, disjoint from every configured project, used for project-matched recent-session discovery and confirmed local import."
             }
           }
         },

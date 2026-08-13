@@ -5,12 +5,14 @@ import {
   lstatSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   statSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { driftReportPath } from "../src/shared/contracts";
+import { driftReportPath, driftSessionTracePath } from "../src/shared/contracts";
 import { configForTests } from "../src/server/config";
 import { IntegrationRegistry } from "../src/server/integrations";
 import { runBounded } from "../src/server/process";
@@ -35,6 +37,7 @@ function fixture(stage = "candidate_final"): {
   alignRoot: string;
   drift: string;
   codex: string;
+  codexSessions: string;
 } {
   const projectRoot = join(root("integration-project"), "workspace's boundary");
   mkdirSync(projectRoot);
@@ -61,6 +64,8 @@ function fixture(stage = "candidate_final"): {
   const driftRoot = root("integration-drift");
   const drift = join(driftRoot, "drift");
   const codex = join(driftRoot, "codex");
+  const codexSessions = join(driftRoot, "sessions");
+  mkdirSync(codexSessions);
   writeFileSync(codex, "#!/bin/sh\nexit 0\n");
   chmodSync(codex, 0o755);
   writeFileSync(
@@ -74,6 +79,16 @@ function fixture(stage = "candidate_final"): {
       'if [ "$1" = validate ]; then',
       '  case "$2" in *invalid*) exit 4 ;; esac',
       "  printf 'valid fixture\\n'",
+      "  exit 0",
+      "fi",
+      'if [ "$1" = import ]; then',
+      '  printf \'%s\\n\' "$@" > "${0%/*}/import-argv"',
+      '  [ "$2" = codex-session ] && [ "$3" = -o ] && [ "$5" = -- ] || exit 3',
+      '  case "$6" in *slow*) sleep 0.2 ;; *fail*) exit 4 ;; esac',
+      "  session_id=$(printf '%s' \"$6\" | sed -E 's/.*-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\.jsonl/\\1/')",
+      '  case "$6" in *mismatch*) session_id=019ff5d2-ba6d-7592-82bd-e2de3a41879b ;; esac',
+      '  printf \'{"kind":"session","schema":"drift.trace/v1","id":"%s","source":{"adapter":"codex-session-jsonl","adapter_version":"fixture","trust":"adapter_asserted","session_id":"%s"}}\\n\' "$session_id" "$session_id" > "$4"',
+      '  chmod 600 "$4"',
       "  exit 0",
       "fi",
       '[ "$1" = analyze ] || exit 2',
@@ -91,7 +106,7 @@ function fixture(stage = "candidate_final"): {
   const config = configForTests(projectRoot, {
     integrations: {
       align: { sourceDirectory: alignRoot, pythonExecutable: "/usr/bin/python3" },
-      drift: { executable: drift, codexExecutable: codex },
+      drift: { executable: drift, codexExecutable: codex, sessionsDirectory: codexSessions },
     },
   });
   const projects = new ProjectRegistry(config.projects);
@@ -101,7 +116,46 @@ function fixture(stage = "candidate_final"): {
     alignRoot,
     drift,
     codex,
+    codexSessions,
   };
+}
+
+function writeCodexSession(
+  sessionsRoot: string,
+  cwd: string,
+  id: string,
+  options: {
+    label?: string;
+    source?: unknown;
+    startedAt?: string;
+    updatedAt?: string;
+    body?: string;
+  } = {},
+): string {
+  const directory = join(sessionsRoot, "2026", "08", "14");
+  mkdirSync(directory, { recursive: true });
+  const startedAt = options.startedAt ?? "2026-08-14T08:00:00.000Z";
+  const path = join(directory, `rollout-${options.label ?? "recent"}-${id}.jsonl`);
+  writeFileSync(
+    path,
+    `${JSON.stringify({
+      timestamp: startedAt,
+      type: "session_meta",
+      payload: {
+        id,
+        session_id: id,
+        timestamp: startedAt,
+        cwd,
+        source: options.source ?? "cli",
+        cli_version: "0.146.0",
+      },
+    })}\n${options.body ?? ""}`,
+  );
+  if (options.updatedAt) {
+    const timestamp = new Date(options.updatedAt);
+    utimesSync(path, timestamp, timestamp);
+  }
+  return path;
 }
 
 function setupFixture(): {
@@ -493,6 +547,140 @@ describe("fixed integration adapters", () => {
     expect(existsSync(join(drift, "../analyze-argv"))).toBe(false);
   });
 
+  test("discovers bounded top-level Codex sessions only for the canonical project", async () => {
+    const { integrations, projectRoot, codexSessions } = fixture();
+    const recentId = "019ff5d2-ba6d-7592-82bd-e2de3a418790";
+    const olderId = "019ff5d2-ba6d-7592-82bd-e2de3a418791";
+    const foreignId = "019ff5d2-ba6d-7592-82bd-e2de3a418792";
+    const subagentId = "019ff5d2-ba6d-7592-82bd-e2de3a418793";
+    const symlinkId = "019ff5d2-ba6d-7592-82bd-e2de3a418794";
+    writeCodexSession(codexSessions, projectRoot, olderId, {
+      startedAt: "2026-08-14T07:00:00.000Z",
+      updatedAt: "2026-08-14T07:30:00.000Z",
+    });
+    const recentPath = writeCodexSession(codexSessions, projectRoot, recentId, {
+      source: "vscode",
+      startedAt: "2026-08-14T08:00:00.000Z",
+      updatedAt: "2026-08-14T08:30:00.000Z",
+    });
+    writeCodexSession(codexSessions, root("foreign-codex-project"), foreignId);
+    writeCodexSession(codexSessions, projectRoot, subagentId, {
+      source: { subagent: { thread_spawn: { parent_thread_id: recentId } } },
+    });
+    const outsideSessions = root("outside-codex-sessions");
+    const outsidePath = writeCodexSession(outsideSessions, projectRoot, symlinkId);
+    symlinkSync(
+      outsidePath,
+      join(codexSessions, "2026/08/14", `rollout-linked-${symlinkId}.jsonl`),
+    );
+
+    const result = (await integrations.dispatch("fixture", "drift.recentSessions", undefined)) as {
+      sessions: Array<Record<string, unknown>>;
+      truncated: boolean;
+    };
+
+    expect(result.truncated).toBe(false);
+    expect(result.sessions.map((session) => session.id)).toEqual([recentId, olderId]);
+    expect(result.sessions[0]).toEqual({
+      id: recentId,
+      startedAt: "2026-08-14T08:00:00.000Z",
+      updatedAt: "2026-08-14T08:30:00.000Z",
+      source: "vscode",
+      byteSize: statSync(recentPath).size,
+    });
+    expect(result.sessions[0]).not.toHaveProperty("path");
+  });
+
+  test("imports one re-resolved Codex session into a private atomic project trace", async () => {
+    const { integrations, projectRoot, codexSessions, drift } = fixture();
+    const sessionId = "019ff5d2-ba6d-7592-82bd-e2de3a418795";
+    const source = writeCodexSession(codexSessions, projectRoot, sessionId);
+
+    const imported = await integrations.dispatch("fixture", "drift.importSession", { sessionId });
+    const tracePath = driftSessionTracePath(sessionId);
+    const destination = join(projectRoot, tracePath);
+
+    expect(imported).toMatchObject({ path: tracePath, session: { id: sessionId, source: "cli" } });
+    expect(statSync(destination).mode & 0o777).toBe(0o600);
+    expect(lstatSync(join(projectRoot, ".drift")).isSymbolicLink()).toBe(false);
+    expect(lstatSync(join(projectRoot, ".drift/traces")).isDirectory()).toBe(true);
+    expect(readdirSync(join(projectRoot, ".drift/traces"))).toEqual([
+      `codex-${sessionId}.drift.jsonl`,
+    ]);
+    const argv = readFileSync(join(drift, "../import-argv"), "utf8").trim().split("\n");
+    expect(argv.slice(0, 3)).toEqual(["import", "codex-session", "-o"]);
+    expect(argv[3]).toMatch(/\.drift\/traces\/\.import-[0-9a-f-]+\.jsonl$/);
+    expect(argv.slice(4)).toEqual(["--", source]);
+  });
+
+  test("rejects foreign, malformed, and unsafe Codex session import targets before execution", async () => {
+    const { integrations, projectRoot, codexSessions, drift } = fixture();
+    const foreignId = "019ff5d2-ba6d-7592-82bd-e2de3a418796";
+    const safeId = "019ff5d2-ba6d-7592-82bd-e2de3a418797";
+    writeCodexSession(codexSessions, root("other-project"), foreignId);
+    writeCodexSession(codexSessions, projectRoot, safeId);
+
+    await expect(
+      integrations.dispatch("fixture", "drift.importSession", { sessionId: foreignId }),
+    ).rejects.toThrow("no longer available for this project");
+    await expect(
+      integrations.dispatch("fixture", "drift.importSession", { sessionId: "../outside" }),
+    ).rejects.toThrow();
+
+    const destination = join(projectRoot, driftSessionTracePath(safeId));
+    const outside = join(root("drift-trace-outside"), "trace.jsonl");
+    mkdirSync(join(projectRoot, ".drift/traces"), { recursive: true });
+    writeFileSync(outside, "outside\n");
+    symlinkSync(outside, destination);
+    await expect(
+      integrations.dispatch("fixture", "drift.importSession", { sessionId: safeId }),
+    ).rejects.toThrow("Drift trace destination is unsafe");
+    expect(readFileSync(outside, "utf8")).toBe("outside\n");
+    expect(existsSync(join(drift, "../import-argv"))).toBe(false);
+  });
+
+  test("preserves a prior imported trace and clears staging after native failure", async () => {
+    const { integrations, projectRoot, codexSessions } = fixture();
+    const sessionId = "019ff5d2-ba6d-7592-82bd-e2de3a418798";
+    writeCodexSession(codexSessions, projectRoot, sessionId, { label: "fail" });
+    const traceDirectory = join(projectRoot, ".drift/traces");
+    const destination = join(projectRoot, driftSessionTracePath(sessionId));
+    mkdirSync(traceDirectory, { recursive: true });
+    writeFileSync(destination, "prior trace\n");
+
+    await expect(
+      integrations.dispatch("fixture", "drift.importSession", { sessionId }),
+    ).rejects.toThrow("Drift session import rejected the project state");
+    expect(readFileSync(destination, "utf8")).toBe("prior trace\n");
+    expect(readdirSync(traceDirectory)).toEqual([`codex-${sessionId}.drift.jsonl`]);
+  });
+
+  test("rejects a native trace for a different Codex session before publication", async () => {
+    const { integrations, projectRoot, codexSessions } = fixture();
+    const sessionId = "019ff5d2-ba6d-7592-82bd-e2de3a41879a";
+    writeCodexSession(codexSessions, projectRoot, sessionId, { label: "mismatch" });
+
+    await expect(
+      integrations.dispatch("fixture", "drift.importSession", { sessionId }),
+    ).rejects.toThrow("different Codex session");
+    expect(existsSync(join(projectRoot, driftSessionTracePath(sessionId)))).toBe(false);
+    expect(readdirSync(join(projectRoot, ".drift/traces"))).toEqual([]);
+  });
+
+  test("serializes Codex session imports with other Drift mutations", async () => {
+    const { integrations, projectRoot, codexSessions } = fixture();
+    const sessionId = "019ff5d2-ba6d-7592-82bd-e2de3a418799";
+    writeCodexSession(codexSessions, projectRoot, sessionId, { label: "slow" });
+    writeFileSync(join(projectRoot, "valid.jsonl"), '{"kind":"session"}\n');
+    const first = integrations.dispatch("fixture", "drift.importSession", { sessionId });
+    await Bun.sleep(20);
+
+    await expect(
+      integrations.dispatch("fixture", "drift.analyze", { path: "valid.jsonl" }),
+    ).rejects.toThrow("already running");
+    await expect(first).resolves.toMatchObject({ path: driftSessionTracePath(sessionId) });
+  });
+
   test("serializes Drift analyses per canonical project and releases admission after failure", async () => {
     const { integrations, projectRoot } = fixture();
     writeFileSync(join(projectRoot, "slow.jsonl"), '{"kind":"session"}\n');
@@ -502,7 +690,7 @@ describe("fixed integration adapters", () => {
 
     await expect(
       integrations.dispatch("fixture", "drift.analyze", { path: "slow.jsonl" }),
-    ).rejects.toThrow("already being analyzed");
+    ).rejects.toThrow("already running");
     await expect(first).resolves.toMatchObject({ path: driftReportPath("slow.jsonl") });
     await expect(
       integrations.dispatch("fixture", "drift.analyze", { path: "fail.jsonl" }),

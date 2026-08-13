@@ -54,6 +54,25 @@ Browser + phone-ready personal agent control plane: durable project PTYs, projec
 - [ ] Keep API 1.0 stable; add host authority only for a bounded usage-backed operation that cannot
       remain inside a static project view.
 
+## Drift Codex-session import
+
+- [x] Convert persisted top-level Codex rollout JSONL into native `drift.trace/v1` without hidden
+      reasoning or invented success.
+- [x] Discover only bounded recent sessions whose recorded canonical cwd matches the selected project.
+- [x] Confirm one opaque-ID import, then write a private project-local `.drift/traces/` artifact.
+- [x] Add the Drift picker/import flow; imported trace becomes the selected analysis input.
+- [x] Cover native protocol mapping, path/symlink authority, confirmation, UI states, and live QA.
+- [x] Run committed-state Drift + host gates, adversarial review, cleanup, and scoped commits.
+
+### Import invariants
+
+- Session discovery returns metadata only; rollout content crosses into the project after explicit
+  confirmation. Import is local-only and model-free; analysis remains a separate confirmed boundary.
+- Browser supplies one session ID. Host re-resolves source + destination from canonical config/project
+  authority, rejects subagent/foreign/oversized/symlinked inputs, and serializes per project.
+- Adapter keeps user/assistant messages + paired tool evidence, excludes reasoning/system prompt payloads,
+  and treats Codex completion as unknown outcome rather than proof of task success.
+
 ## Preview create/update action
 
 - [x] Move generated dashboard state behind a configured host-owned artifact root outside target repos.

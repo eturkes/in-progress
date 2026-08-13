@@ -291,6 +291,7 @@ export function createControlPlane(config: InProgressConfig, options: AppOptions
         security.assertBrowserMutation(request);
         const rpc = PluginRpcRequestSchema.parse(await jsonBody(request));
         if (rpc.method === "drift.analyze") bunServer.timeout(request, 21 * 60);
+        if (rpc.method === "drift.importSession") bunServer.timeout(request, 75);
         const result = await plugins.dispatch(
           rpcRoute[1]!,
           rpcRoute[2]!,

@@ -1,16 +1,21 @@
 import {
   DriftAnalyzeRequestSchema,
+  DriftImportSessionRequestSchema,
   TreeForkRequestSchema,
   type PluginCapability,
   type TreeForkRequest,
   driftReportPath,
+  driftSessionTracePath,
 } from "../shared/contracts";
 
 export type PluginAuthorityDecision =
   | { allowed: true; params: unknown }
   | { allowed: false; error: string };
 
-const AUTHORITY_POLICY: Record<PluginCapability, "none" | "drift-analyze" | "tree-fork"> = {
+const AUTHORITY_POLICY: Record<
+  PluginCapability,
+  "none" | "drift-analyze" | "drift-import" | "tree-fork"
+> = {
   "project.metadata": "none",
   "project.tree": "none",
   "project.readText": "none",
@@ -19,6 +24,8 @@ const AUTHORITY_POLICY: Record<PluginCapability, "none" | "drift-analyze" | "tre
   "align.status": "none",
   "drift.render": "none",
   "drift.validateTraces": "none",
+  "drift.recentSessions": "none",
+  "drift.importSession": "drift-import",
   "drift.analyze": "drift-analyze",
   "tree-complete.workspace": "none",
   "tree-complete.createFork": "tree-fork",
@@ -95,6 +102,31 @@ function confirmDriftAnalysis(
   );
 }
 
+function confirmDriftSessionImport(
+  pluginName: string,
+  pluginId: string,
+  projectName: string,
+  projectId: string,
+  sessionId: string,
+  confirm: (message: string) => boolean,
+): boolean {
+  const identity = [
+    `Plugin: ${visibleLabel(pluginName)}`,
+    `Plugin ID: ${visibleId(pluginId)}`,
+    `Project: ${visibleLabel(projectName)}`,
+    `Project ID: ${visibleId(projectId)}`,
+    `Codex session: ${visibleId(sessionId)}`,
+    `Trace: ${visibleLabel(driftSessionTracePath(sessionId))}`,
+  ].join("\n");
+  return confirm(
+    `Drift Codex session import\n\n${identity}\n\n` +
+      "This reads the selected local Codex session outside the project and creates or replaces a private trace inside the selected project. " +
+      "The trace contains visible messages and tool inputs/outputs, which may include source, terminal output, personal data, or secrets.\n\n" +
+      "Import is local-only: it does not contact a model, OpenAI, or another provider. Analyzing the imported trace is a separate confirmed action.\n\n" +
+      "Continue?",
+  );
+}
+
 export function authorizePluginRequest(
   method: PluginCapability,
   params: unknown,
@@ -121,6 +153,23 @@ export function authorizePluginRequest(
       )
     ) {
       return { allowed: false, error: "Drift analysis canceled by the user" };
+    }
+    return { allowed: true, params: request.data };
+  }
+  if (policy === "drift-import") {
+    const request = DriftImportSessionRequestSchema.safeParse(params);
+    if (!request.success) return { allowed: false, error: "Invalid Codex session import request" };
+    if (
+      !confirmDriftSessionImport(
+        pluginName,
+        pluginId,
+        projectName,
+        projectId,
+        request.data.sessionId,
+        confirm,
+      )
+    ) {
+      return { allowed: false, error: "Drift session import canceled by the user" };
     }
     return { allowed: true, params: request.data };
   }

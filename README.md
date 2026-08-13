@@ -140,7 +140,7 @@ pnpm dev:ecosystem
 | View          | Project-bound behavior                                                        | Host authority                         |
 | ------------- | ----------------------------------------------------------------------------- | -------------------------------------- |
 | Align         | Compact verified lifecycle, one-click setup, and next action                  | Fixed status + local initialization    |
-| Drift         | Analyzes project trace JSONL; renders only native-validator-clean reports     | Confirmed fixed analyze + render       |
+| Drift         | Imports matching Codex sessions, analyzes traces, renders validated reports   | Confirmed fixed import + analyze       |
 | Preview       | Selects, generates, or updates the active project's validated dashboard       | Fixed read-only Codex authoring        |
 | Tree Complete | Explores/forks project-identified decision lineage; default simulates locally | Narrow embedded workspace/fork service |
 | Turbo Prompt  | Builds prompts from host-bound metadata, tree, instructions, and manifests    | Bounded project reads                  |
@@ -164,8 +164,12 @@ send only that bounded UTF-8 text; the host fixes the selected root/name, truste
 Python, `user` authority, and `in_progress` stage. Setup writes `.align` locally, contacts no model or
 external service, rejects an existing baseline, and reloads the verified lifecycle view after success.
 
-In the Drift view, the host checks up to 32 discovered JSONL candidates with native `drift validate`;
-arbitrary JSONL never enables **Analyze trace**. The action accepts one validated `drift.trace/v1` file. Trusted
+In the Drift view, **Import recent Codex session** lists only bounded metadata for top-level sessions
+whose recorded canonical cwd matches the selected project. A trusted confirmation then reads one
+host-resolved rollout and atomically creates/replaces `.drift/traces/codex-*.drift.jsonl` mode `0600`;
+import is local-only and excludes hidden reasoning/system context. The host checks up to 32 discovered
+JSONL candidates with native `drift validate`; arbitrary JSONL never enables **Analyze trace**. The
+action accepts one validated `drift.trace/v1` file. Trusted
 host confirmation names the selected trace and deterministic `.drift/reports/*.drift.json` destination
 immediately before local writes and model use. The host fixes the project, binaries, `gpt-5.6-sol`,
 arguments, limits, and destination; one analysis runs per canonical project. Trace content reaches

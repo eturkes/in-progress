@@ -78,14 +78,16 @@ The machine-readable contract is [in-progress-config.schema.json](in-progress-co
 Project configuration is static for a server run. Each project record supplies the trusted canonical working directory used for sanitized read-only Git queries, plugin reads, and new shells.
 
 Integration configuration is also static and host-owned. Align gets fixed status plus one-shot local
-initialization invocations; Drift gets confirmed fixed trace analysis plus validating render; Preview gets one project-bound
+initialization invocations; Drift gets project-matched Codex-session discovery, confirmed local import,
+fixed trace analysis, and validating render; Preview gets one project-bound
 external generate/package operation; Tree Complete loads one built embedded service per selected
 project with host-fixed project/data roots and runner mode. Static plugin manifests grant access to
 named read methods but cannot configure code, argv, paths, models, or mode. Alignment's iframe stays
 read-only; trusted host chrome owns exact-intent entry, local-write confirmation, fixed initialization,
-and verified remount. Drift's iframe may select only a discovered project-relative JSONL trace that
-the host has accepted through bounded native validation; trusted
-host confirmation gates fixed model use and deterministic project-local report publication. Preview remains
+and verified remount. Drift's iframe can request one opaque discovered session ID; trusted confirmation
+gates the external local read and deterministic private trace write. It may select only a discovered
+project-relative JSONL trace that the host has accepted through bounded native validation; a separate
+trusted confirmation gates fixed model use and deterministic project-local report publication. Preview remains
 capability-free: trusted host chrome owns its button, disclosure confirmation, CSRF mutation, async
 job, commit-triggered automatic policy, and frame remount. Its CLI fixes ChatGPT auth, `gpt-5.6-sol`,
 `max`, a read-only OS sandbox, structured output validation, and atomic external publication. Update

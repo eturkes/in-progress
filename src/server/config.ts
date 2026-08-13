@@ -44,6 +44,7 @@ const RawConfigSchema = z
           .object({
             executable: z.string().min(1),
             codexExecutable: z.string().min(1).default("/usr/bin/codex"),
+            sessionsDirectory: z.string().min(1).default("~/.codex/sessions"),
           })
           .strict()
           .optional(),
@@ -113,7 +114,7 @@ export interface InProgressConfig {
   pluginDirectories: string[];
   integrations: {
     align?: { sourceDirectory: string; pythonExecutable: string };
-    drift?: { executable: string; codexExecutable: string };
+    drift?: { executable: string; codexExecutable: string; sessionsDirectory: string };
     preview?: {
       sourceDirectory: string;
       executable: string;
@@ -224,6 +225,13 @@ export async function loadConfig(
         "Preview artifact directory",
       )
     : undefined;
+  const driftSessionsDirectory = parsed.integrations.drift
+    ? resolveDirectory(
+        rootDir,
+        parsed.integrations.drift.sessionsDirectory,
+        "Codex sessions directory",
+      )
+    : undefined;
   if (
     previewArtifactDirectory &&
     projects.some(
@@ -233,6 +241,16 @@ export async function loadConfig(
     )
   ) {
     throw new Error("Preview artifact directory must be separate from every project");
+  }
+  if (
+    driftSessionsDirectory &&
+    projects.some(
+      (project) =>
+        within(project.path, driftSessionsDirectory) ||
+        within(driftSessionsDirectory, project.path),
+    )
+  ) {
+    throw new Error("Codex sessions directory must be separate from every project");
   }
 
   const pluginDirectories = parsed.pluginDirectories.map((path) =>
@@ -306,6 +324,7 @@ export async function loadConfig(
                 parsed.integrations.drift.codexExecutable,
                 "Drift Codex executable",
               ),
+              sessionsDirectory: driftSessionsDirectory!,
             },
           }
         : {}),

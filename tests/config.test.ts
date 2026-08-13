@@ -43,8 +43,10 @@ describe("loadConfig", () => {
     const preview = join(directory, "preview");
     const previewArtifacts = join(directory, "preview-artifacts");
     const drift = join(directory, "drift");
+    const codexSessions = join(directory, "codex-sessions");
     mkdirSync(project);
     mkdirSync(plugins);
+    mkdirSync(codexSessions);
     mkdirSync(align);
     mkdirSync(treeComplete);
     mkdirSync(join(preview, "bin"), { recursive: true });
@@ -67,7 +69,11 @@ describe("loadConfig", () => {
       pluginDirectories: ["./plugins"],
       integrations: {
         align: { sourceDirectory: "./align", pythonExecutable: drift },
-        drift: { executable: "./drift", codexExecutable: "./drift" },
+        drift: {
+          executable: "./drift",
+          codexExecutable: "./drift",
+          sessionsDirectory: "./codex-sessions",
+        },
         preview: {
           sourceDirectory: "./preview",
           artifactDirectory: "./preview-artifacts",
@@ -94,7 +100,11 @@ describe("loadConfig", () => {
         sourceDirectory: realpathSync(align),
         pythonExecutable: realpathSync(drift),
       },
-      drift: { executable: realpathSync(drift), codexExecutable: realpathSync(drift) },
+      drift: {
+        executable: realpathSync(drift),
+        codexExecutable: realpathSync(drift),
+        sessionsDirectory: realpathSync(codexSessions),
+      },
       preview: {
         sourceDirectory: realpathSync(preview),
         executable: realpathSync(join(preview, "bin/preview")),
@@ -219,6 +229,29 @@ describe("loadConfig", () => {
 
     await expect(loadConfig(configPath)).rejects.toThrow(
       "Preview artifact directory must be separate from every project",
+    );
+  });
+
+  test("requires Codex sessions to be disjoint from every configured project", async () => {
+    const directory = root();
+    mkdirSync(join(directory, "workspace"));
+    const drift = join(directory, "drift");
+    writeFileSync(drift, "#!/bin/sh\n");
+    chmodSync(drift, 0o755);
+    const configPath = join(directory, "in-progress.config.json");
+    writeJson(configPath, {
+      projects: [{ id: "demo", name: "Demo", path: "workspace" }],
+      integrations: {
+        drift: {
+          executable: "drift",
+          codexExecutable: "drift",
+          sessionsDirectory: "workspace",
+        },
+      },
+    });
+
+    await expect(loadConfig(configPath)).rejects.toThrow(
+      "Codex sessions directory must be separate from every project",
     );
   });
 

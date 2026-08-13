@@ -160,7 +160,8 @@ The initialization context exposes only the identity needed to label the selecte
 ## SDK
 
 `@in-progress/plugin-sdk` implements handshake, version/capability checks, disposal, typed context,
-15-second ordinary RPC deadlines, and the fixed 21-minute `drift.analyze` deadline:
+15-second ordinary RPC deadlines, a 75-second `drift.importSession` deadline, and the fixed 21-minute
+`drift.analyze` deadline:
 
 ```ts
 import { connectInProgress } from "@in-progress/plugin-sdk";
@@ -371,6 +372,64 @@ The server canonicalizes every candidate to a regular file beneath the frame-bou
 fixed, isolated, five-second native validation in groups of four. It returns paths only—never trace
 contents or validator diagnostics. Plugins use this result to prevent arbitrary JSONL, Align
 journals, and raw Codex streams from enabling analysis.
+
+### `drift.recentSessions`
+
+Permission: `drift.recentSessions`. Requires the trusted host-side Drift integration; read-only,
+metadata-only, and model-free. Parameters are `undefined`.
+
+```ts
+{
+  sessions: Array<{
+    id: string; // opaque canonical UUID
+    startedAt: string;
+    updatedAt: string;
+    source: string;
+    byteSize: number;
+  }>;
+  truncated: boolean;
+}
+```
+
+The server scans the configured Codex session root through a fixed year/month/day layout with entry,
+file, metadata-line, and 32 MiB source bounds. It rejects symlinks, malformed metadata, subagent
+sources, duplicate IDs, and sessions whose recorded cwd does not canonicalize to the selected
+project. Up to 20 newest matches are returned without source paths or rollout content.
+
+### `drift.importSession`
+
+Permission: `drift.importSession`. Requires explicit user action and trusted confirmation.
+
+```ts
+{
+  sessionId: string;
+}
+
+// response
+{
+  path: string; // `.drift/traces/codex-SESSION_ID.drift.jsonl`
+  session: {
+    id: string;
+    startedAt: string;
+    updatedAt: string;
+    source: string;
+    byteSize: number;
+  }
+}
+```
+
+The browser supplies one UUID only. Confirmation names plugin/project/session identity, deterministic
+project output, external local-session read, potentially sensitive message/tool evidence, and
+local-only/model-free behavior. The server re-discovers the ID under the configured root and exact
+project cwd immediately before invocation; source path, executable, adapter, output, environment,
+and limits remain host-owned. Native `drift import codex-session` excludes developer/system messages,
+compaction payloads, encrypted reasoning, and unrecognized record families; it retains visible
+transcript and linked tool evidence without treating Codex completion as task success.
+
+Import writes a random private stage beneath real `.drift/traces/`, natively revalidates it, then
+renames it over the deterministic mode-`0600` trace. Failure preserves prior output and removes the
+stage. Import and analysis share one canonical-project mutation admission. Analysis remains a
+separate confirmation because only that second action discloses trace content to OpenAI.
 
 ### `drift.analyze`
 

@@ -1,20 +1,28 @@
-import { lstat, mkdir, realpath } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { constants } from "node:fs";
+import { lstat, mkdir, open, realpath, rename, unlink } from "node:fs/promises";
 import { isAbsolute, join, relative, sep } from "node:path";
 import { z } from "zod";
 import {
   DriftAnalyzeRequestSchema,
+  DriftCodexSessionIdSchema,
+  DriftImportSessionRequestSchema,
   DriftValidateTracesRequestSchema,
   TreeForkRequestSchema,
   type AlignSetupRequest,
   type AlignStatus,
   type DriftRender,
+  type DriftImportedSession,
+  type DriftRecentSessions,
   type DriftValidatedTraces,
   driftReportPath,
+  driftSessionTracePath,
 } from "../shared/contracts";
 import type { InProgressConfig } from "./config";
 import { runBounded } from "./process";
 import { ProjectRegistry } from "./projects";
 import { HttpError } from "./security";
+import { discoverDriftCodexSessions } from "./drift-sessions";
 import {
   loadTreeCompleteModule,
   TREE_COMPLETE_PUBLIC_RESPONSE_MAX_BYTES,
@@ -190,6 +198,23 @@ const DRIFT_ANALYZE_TIMEOUT_MS = 20 * 60_000 + 30_000;
 const DRIFT_ATTEMPTS = 2;
 const DRIFT_MODEL = "gpt-5.6-sol";
 const DRIFT_OBSERVER_TIMEOUT_SECONDS = 600;
+const DRIFT_IMPORT_TIMEOUT_MS = 60_000;
+const DRIFT_RECENT_SESSION_LIMIT = 20;
+const DRIFT_TRACE_LINE_BYTES = 4 * 1024 * 1024;
+
+const DriftImportedSessionHeaderSchema = z
+  .object({
+    kind: z.literal("session"),
+    schema: z.literal("drift.trace/v1"),
+    id: DriftCodexSessionIdSchema,
+    source: z
+      .object({
+        adapter: z.literal("codex-session-jsonl"),
+        session_id: DriftCodexSessionIdSchema,
+      })
+      .passthrough(),
+  })
+  .passthrough();
 
 const ALIGN_BOOTSTRAP = [
   "import runpy,sys",
@@ -230,47 +255,73 @@ function pathWithin(root: string, candidate: string): boolean {
   return path === "" || (!path.startsWith(`..${sep}`) && path !== ".." && !isAbsolute(path));
 }
 
-async function ensureDriftReportDirectory(projectRoot: string): Promise<string> {
+async function ensureDriftPrivateDirectory(
+  projectRoot: string,
+  child: "reports" | "traces",
+): Promise<string> {
   let current = projectRoot;
-  for (const segment of [".drift", "reports"]) {
+  const label = child === "reports" ? "report" : "trace";
+  for (const segment of [".drift", child]) {
     const candidate = join(current, segment);
     let info;
     try {
       info = await lstat(candidate);
     } catch (error) {
       if (errorCode(error) !== "ENOENT") {
-        throw new HttpError(502, "Drift report directory is unavailable");
+        throw new HttpError(502, `Drift ${label} directory is unavailable`);
       }
       try {
         await mkdir(candidate, { mode: 0o700 });
         info = await lstat(candidate);
       } catch (createError) {
         if (errorCode(createError) !== "EEXIST") {
-          throw new HttpError(502, "Drift report directory could not be created");
+          throw new HttpError(502, `Drift ${label} directory could not be created`);
         }
         info = await lstat(candidate).catch(() => {
-          throw new HttpError(409, "Drift report directory is unsafe");
+          throw new HttpError(409, `Drift ${label} directory is unsafe`);
         });
       }
     }
     if (info.isSymbolicLink() || !info.isDirectory()) {
-      throw new HttpError(409, "Drift report directory is unsafe");
+      throw new HttpError(409, `Drift ${label} directory is unsafe`);
     }
     const canonical = await realpath(candidate).catch(() => {
-      throw new HttpError(409, "Drift report directory is unsafe");
+      throw new HttpError(409, `Drift ${label} directory is unsafe`);
     });
     if (!pathWithin(projectRoot, canonical)) {
-      throw new HttpError(409, "Drift report directory is unsafe");
+      throw new HttpError(409, `Drift ${label} directory is unsafe`);
     }
     current = canonical;
   }
   return current;
 }
 
+async function driftImportedSessionMatches(path: string, sessionId: string): Promise<boolean> {
+  let handle;
+  try {
+    handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const buffer = Buffer.alloc(DRIFT_TRACE_LINE_BYTES + 1);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    const newline = buffer.subarray(0, bytesRead).indexOf(0x0a);
+    if (newline < 0) return false;
+    const document: unknown = JSON.parse(
+      new TextDecoder("utf-8", { fatal: true }).decode(buffer.subarray(0, newline)),
+    );
+    const parsed = DriftImportedSessionHeaderSchema.safeParse(document);
+    return (
+      parsed.success && parsed.data.id === sessionId && parsed.data.source.session_id === sessionId
+    );
+  } catch {
+    return false;
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+}
+
 export class IntegrationRegistry {
   readonly #treeServices = new Map<string, Promise<TreeCompleteService>>();
   readonly #alignInitializations = new Map<string, Promise<AlignStatus>>();
-  readonly #driftAnalyses = new Map<string, Promise<DriftRender>>();
+  readonly #driftMutations = new Map<string, Promise<unknown>>();
   #closed = false;
   #closing: Promise<void> | null = null;
 
@@ -286,6 +337,8 @@ export class IntegrationRegistry {
       | "align.status"
       | "drift.render"
       | "drift.validateTraces"
+      | "drift.recentSessions"
+      | "drift.importSession"
       | "drift.analyze"
       | "tree-complete.workspace"
       | "tree-complete.createFork",
@@ -301,6 +354,10 @@ export class IntegrationRegistry {
         return await this.#driftRender(projectId, params);
       case "drift.validateTraces":
         return await this.#driftValidateTraces(projectId, params);
+      case "drift.recentSessions":
+        return await this.#driftRecentSessions(projectId, params);
+      case "drift.importSession":
+        return await this.#driftImportSession(projectId, params);
       case "drift.analyze":
         return await this.#driftAnalyze(projectId, params);
       case "tree-complete.workspace": {
@@ -490,18 +547,119 @@ export class IntegrationRegistry {
     return { paths: valid };
   }
 
+  async #driftRecentSessions(projectId: string, rawParams: unknown): Promise<DriftRecentSessions> {
+    const integration = this.config.drift;
+    if (!integration) throw new HttpError(503, "Drift integration is not configured");
+    z.undefined().parse(rawParams);
+    const project = this.projects.get(projectId);
+    const discovered = await discoverDriftCodexSessions(
+      integration.sessionsDirectory,
+      project.path,
+    );
+    return {
+      sessions: discovered.sessions
+        .slice(0, DRIFT_RECENT_SESSION_LIMIT)
+        .map(({ path, ...session }) => {
+          void path;
+          return session;
+        }),
+      truncated: discovered.truncated || discovered.sessions.length > DRIFT_RECENT_SESSION_LIMIT,
+    };
+  }
+
+  async #driftImportSession(projectId: string, rawParams: unknown): Promise<DriftImportedSession> {
+    const request = DriftImportSessionRequestSchema.parse(rawParams);
+    return await this.#runDriftMutation(
+      projectId,
+      "A Drift operation is already running for this project",
+      async () => await this.#runDriftSessionImport(projectId, request.sessionId),
+    );
+  }
+
+  async #runDriftSessionImport(
+    projectId: string,
+    sessionId: string,
+  ): Promise<DriftImportedSession> {
+    const integration = this.config.drift;
+    if (!integration) throw new HttpError(503, "Drift integration is not configured");
+    const project = this.projects.get(projectId);
+    const discovered = await discoverDriftCodexSessions(
+      integration.sessionsDirectory,
+      project.path,
+    );
+    const source = discovered.sessions.find((session) => session.id === sessionId);
+    if (!source) {
+      throw new HttpError(404, "Codex session is no longer available for this project");
+    }
+
+    const relativePath = driftSessionTracePath(sessionId);
+    const traceDirectory = await ensureDriftPrivateDirectory(project.path, "traces");
+    const destination = join(traceDirectory, relativePath.split("/").at(-1)!);
+    const existing = await lstat(destination).catch((error) => {
+      if (errorCode(error) === "ENOENT") return null;
+      throw new HttpError(502, "Drift trace destination is unavailable");
+    });
+    if (existing && (existing.isSymbolicLink() || !existing.isFile())) {
+      throw new HttpError(409, "Drift trace destination is unsafe");
+    }
+
+    const stage = join(traceDirectory, `.import-${randomUUID()}.jsonl`);
+    try {
+      await runBounded(
+        [integration.executable, "import", "codex-session", "-o", stage, "--", source.path],
+        {
+          cwd: project.path,
+          env: ISOLATED_TOOL_ENV,
+          timeoutMs: DRIFT_IMPORT_TIMEOUT_MS,
+          stdoutBytes: 64 * 1024,
+          label: "Drift session import",
+        },
+      );
+      if (!(await this.#driftTraceIsValid(project.path, stage))) {
+        throw new HttpError(502, "Drift imported an invalid trace");
+      }
+      if (!(await driftImportedSessionMatches(stage, sessionId))) {
+        throw new HttpError(502, "Drift imported a different Codex session");
+      }
+      await rename(stage, destination).catch(() => {
+        throw new HttpError(502, "Drift trace could not be published");
+      });
+    } finally {
+      await unlink(stage).catch((error) => {
+        if (errorCode(error) !== "ENOENT") {
+          throw new HttpError(502, "Drift import staging cleanup failed");
+        }
+      });
+    }
+    const { path, ...session } = source;
+    void path;
+    return { path: relativePath, session };
+  }
+
   async #driftAnalyze(projectId: string, rawParams: unknown): Promise<DriftRender> {
+    return await this.#runDriftMutation(
+      projectId,
+      "A Drift operation is already running for this project",
+      async () => await this.#runDriftAnalysis(projectId, rawParams),
+    );
+  }
+
+  async #runDriftMutation<T>(
+    projectId: string,
+    conflict: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
     if (this.#closed) throw new HttpError(503, "Integration registry is closed");
     const projectKey = this.projects.get(projectId).path;
-    if (this.#driftAnalyses.has(projectKey)) {
-      throw new HttpError(409, "A Drift trace is already being analyzed for this project");
-    }
-    const operation = this.#runDriftAnalysis(projectId, rawParams);
-    let tracked: Promise<DriftRender>;
-    tracked = operation.finally(() => {
-      if (this.#driftAnalyses.get(projectKey) === tracked) this.#driftAnalyses.delete(projectKey);
+    if (this.#driftMutations.has(projectKey)) throw new HttpError(409, conflict);
+    const pending = operation();
+    let tracked: Promise<T>;
+    tracked = pending.finally(() => {
+      if (this.#driftMutations.get(projectKey) === tracked) {
+        this.#driftMutations.delete(projectKey);
+      }
     });
-    this.#driftAnalyses.set(projectKey, tracked);
+    this.#driftMutations.set(projectKey, tracked);
     return await tracked;
   }
 
@@ -515,7 +673,7 @@ export class IntegrationRegistry {
       throw new HttpError(422, "Selected JSONL is not a valid Drift trace");
     }
     const reportPath = driftReportPath(params.path);
-    const reportDirectory = await ensureDriftReportDirectory(project.path);
+    const reportDirectory = await ensureDriftPrivateDirectory(project.path, "reports");
     const report = join(reportDirectory, reportPath.split("/").at(-1)!);
     const existing = await lstat(report).catch((error) => {
       if (errorCode(error) === "ENOENT") return null;
@@ -641,12 +799,12 @@ export class IntegrationRegistry {
     this.#closed = true;
     const alignInitializations = [...this.#alignInitializations.values()];
     this.#alignInitializations.clear();
-    const driftAnalyses = [...this.#driftAnalyses.values()];
-    this.#driftAnalyses.clear();
+    const driftMutations = [...this.#driftMutations.values()];
+    this.#driftMutations.clear();
     const pending = [...this.#treeServices.values()];
     this.#treeServices.clear();
     this.#closing = (async () => {
-      await Promise.allSettled([...alignInitializations, ...driftAnalyses]);
+      await Promise.allSettled([...alignInitializations, ...driftMutations]);
       const services = await Promise.allSettled(pending);
       const failures: unknown[] = services.flatMap((result) =>
         result.status === "rejected" ? [result.reason] : [],
