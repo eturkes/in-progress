@@ -3,10 +3,12 @@ import { isAbsolute, join, relative, sep } from "node:path";
 import { z } from "zod";
 import {
   DriftAnalyzeRequestSchema,
+  DriftValidateTracesRequestSchema,
   TreeForkRequestSchema,
   type AlignSetupRequest,
   type AlignStatus,
   type DriftRender,
+  type DriftValidatedTraces,
   driftReportPath,
 } from "../shared/contracts";
 import type { InProgressConfig } from "./config";
@@ -283,6 +285,7 @@ export class IntegrationRegistry {
     method:
       | "align.status"
       | "drift.render"
+      | "drift.validateTraces"
       | "drift.analyze"
       | "tree-complete.workspace"
       | "tree-complete.createFork",
@@ -296,6 +299,8 @@ export class IntegrationRegistry {
       }
       case "drift.render":
         return await this.#driftRender(projectId, params);
+      case "drift.validateTraces":
+        return await this.#driftValidateTraces(projectId, params);
       case "drift.analyze":
         return await this.#driftAnalyze(projectId, params);
       case "tree-complete.workspace": {
@@ -447,6 +452,44 @@ export class IntegrationRegistry {
     return { path: params.path, text: stdout };
   }
 
+  async #driftTraceIsValid(projectPath: string, trace: string): Promise<boolean> {
+    const integration = this.config.drift;
+    if (!integration) throw new HttpError(503, "Drift integration is not configured");
+    try {
+      await runBounded([integration.executable, "validate", trace], {
+        cwd: projectPath,
+        env: ISOLATED_TOOL_ENV,
+        timeoutMs: 5_000,
+        stdoutBytes: 64 * 1024,
+        label: "Drift trace validation",
+      });
+      return true;
+    } catch (error) {
+      if (error instanceof HttpError && error.status === 422) return false;
+      throw error;
+    }
+  }
+
+  async #driftValidateTraces(projectId: string, rawParams: unknown): Promise<DriftValidatedTraces> {
+    if (!this.config.drift) throw new HttpError(503, "Drift integration is not configured");
+    const params = DriftValidateTracesRequestSchema.parse(rawParams);
+    const project = this.projects.get(projectId);
+    const valid: string[] = [];
+    for (let offset = 0; offset < params.paths.length; offset += 4) {
+      const chunk = params.paths.slice(offset, offset + 4);
+      const results = await Promise.all(
+        chunk.map(async (path) => {
+          const trace = await this.projects.resolveFile(projectId, path);
+          return await this.#driftTraceIsValid(project.path, trace);
+        }),
+      );
+      for (const [index, isValid] of results.entries()) {
+        if (isValid) valid.push(chunk[index]!);
+      }
+    }
+    return { paths: valid };
+  }
+
   async #driftAnalyze(projectId: string, rawParams: unknown): Promise<DriftRender> {
     if (this.#closed) throw new HttpError(503, "Integration registry is closed");
     const projectKey = this.projects.get(projectId).path;
@@ -468,6 +511,9 @@ export class IntegrationRegistry {
     const params = DriftAnalyzeRequestSchema.parse(rawParams);
     const project = this.projects.get(projectId);
     const trace = await this.projects.resolveFile(projectId, params.path);
+    if (!(await this.#driftTraceIsValid(project.path, trace))) {
+      throw new HttpError(422, "Selected JSONL is not a valid Drift trace");
+    }
     const reportPath = driftReportPath(params.path);
     const reportDirectory = await ensureDriftReportDirectory(project.path);
     const report = join(reportDirectory, reportPath.split("/").at(-1)!);

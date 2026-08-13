@@ -164,7 +164,8 @@ send only that bounded UTF-8 text; the host fixes the selected root/name, truste
 Python, `user` authority, and `in_progress` stage. Setup writes `.align` locally, contacts no model or
 external service, rejects an existing baseline, and reloads the verified lifecycle view after success.
 
-In the Drift view, **Analyze trace** accepts one discovered native `drift.trace/v1` JSONL file. Trusted
+In the Drift view, the host checks up to 32 discovered JSONL candidates with native `drift validate`;
+arbitrary JSONL never enables **Analyze trace**. The action accepts one validated `drift.trace/v1` file. Trusted
 host confirmation names the selected trace and deterministic `.drift/reports/*.drift.json` destination
 immediately before local writes and model use. The host fixes the project, binaries, `gpt-5.6-sol`,
 arguments, limits, and destination; one analysis runs per canonical project. Trace content reaches

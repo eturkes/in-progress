@@ -19,6 +19,7 @@ export const PluginCapabilitySchema = z.enum([
   "host.notify",
   "align.status",
   "drift.render",
+  "drift.validateTraces",
   "drift.analyze",
   "tree-complete.workspace",
   "tree-complete.createFork",
@@ -183,30 +184,39 @@ export const AlignSetupRequestSchema = z
 
 export type AlignSetupRequest = z.infer<typeof AlignSetupRequestSchema>;
 
-export const DriftAnalyzeRequestSchema = z
+export const DriftTracePathSchema = z
+  .string()
+  .min(1)
+  .max(1_024)
+  .refine((value) => !value.includes("\0"), "Drift trace path cannot contain a null byte")
+  .refine((value) => !hasLoneSurrogate(value), "Drift trace path cannot contain a lone surrogate")
+  .refine(
+    (value) =>
+      !value.startsWith("/") &&
+      value.split("/").every((segment) => segment !== "" && segment !== "." && segment !== ".."),
+    "Drift trace path must be project-relative",
+  )
+  .regex(/\.jsonl$/i, "Drift trace must be JSONL");
+
+export const DriftAnalyzeRequestSchema = z.object({ path: DriftTracePathSchema }).strict();
+
+export type DriftAnalyzeRequest = z.infer<typeof DriftAnalyzeRequestSchema>;
+
+export const DriftValidateTracesRequestSchema = z
   .object({
-    path: z
-      .string()
+    paths: z
+      .array(DriftTracePathSchema)
       .min(1)
-      .max(1_024)
-      .refine((value) => !value.includes("\0"), "Drift trace path cannot contain a null byte")
-      .refine(
-        (value) => !hasLoneSurrogate(value),
-        "Drift trace path cannot contain a lone surrogate",
-      )
-      .refine(
-        (value) =>
-          !value.startsWith("/") &&
-          value
-            .split("/")
-            .every((segment) => segment !== "" && segment !== "." && segment !== ".."),
-        "Drift trace path must be project-relative",
-      )
-      .regex(/\.jsonl$/i, "Drift trace must be JSONL"),
+      .max(32)
+      .refine((paths) => new Set(paths).size === paths.length, "Drift trace paths must be unique"),
   })
   .strict();
 
-export type DriftAnalyzeRequest = z.infer<typeof DriftAnalyzeRequestSchema>;
+export type DriftValidateTracesRequest = z.infer<typeof DriftValidateTracesRequestSchema>;
+
+export interface DriftValidatedTraces {
+  paths: string[];
+}
 
 export function driftReportPath(tracePath: string): string {
   const basename = tracePath.split("/").at(-1) ?? "trace.jsonl";
@@ -271,6 +281,7 @@ export const PluginRpcRequestSchema = z
       "host.notify",
       "align.status",
       "drift.render",
+      "drift.validateTraces",
       "drift.analyze",
       "tree-complete.workspace",
       "tree-complete.createFork",

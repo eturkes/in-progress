@@ -71,6 +71,11 @@ function fixture(stage = "candidate_final"): {
       "  printf 'INSPECT — validated %s\\n' \"$2\"",
       "  exit 0",
       "fi",
+      'if [ "$1" = validate ]; then',
+      '  case "$2" in *invalid*) exit 4 ;; esac',
+      "  printf 'valid fixture\\n'",
+      "  exit 0",
+      "fi",
       '[ "$1" = analyze ] || exit 2',
       'printf \'%s\\n\' "$@" > "${0%/*}/analyze-argv"',
       '[ "$2" = --codex ] && [ "$4" = --model ] && [ "$6" = --timeout-seconds ] && [ "$8" = --attempts ] && [ "${10}" = -o ] && [ "${12}" = -- ] || exit 3',
@@ -471,6 +476,23 @@ describe("fixed integration adapters", () => {
     ]);
   });
 
+  test("returns only native-valid Drift candidates and rejects invalid JSONL before writes", async () => {
+    const { integrations, projectRoot, drift } = fixture();
+    writeFileSync(join(projectRoot, "valid.jsonl"), '{"kind":"session"}\n');
+    writeFileSync(join(projectRoot, "invalid.jsonl"), "");
+
+    await expect(
+      integrations.dispatch("fixture", "drift.validateTraces", {
+        paths: ["invalid.jsonl", "valid.jsonl"],
+      }),
+    ).resolves.toEqual({ paths: ["valid.jsonl"] });
+    await expect(
+      integrations.dispatch("fixture", "drift.analyze", { path: "invalid.jsonl" }),
+    ).rejects.toThrow("not a valid Drift trace");
+    expect(existsSync(join(projectRoot, ".drift"))).toBe(false);
+    expect(existsSync(join(drift, "../analyze-argv"))).toBe(false);
+  });
+
   test("serializes Drift analyses per canonical project and releases admission after failure", async () => {
     const { integrations, projectRoot } = fixture();
     writeFileSync(join(projectRoot, "slow.jsonl"), '{"kind":"session"}\n');
@@ -550,6 +572,9 @@ describe("fixed integration adapters", () => {
     ).rejects.toThrow("not configured");
     await expect(
       integrations.dispatch("fixture", "drift.analyze", { path: "trace.jsonl" }),
+    ).rejects.toThrow("not configured");
+    await expect(
+      integrations.dispatch("fixture", "drift.validateTraces", { paths: ["trace.jsonl"] }),
     ).rejects.toThrow("not configured");
   });
 

@@ -351,6 +351,27 @@ Align owns the on-disk transaction. A native crash or forced timeout can leave f
 `.align` state; the host never deletes, replaces, or guesses how to repair it. Inspect that state in
 the project before any manual recovery.
 
+### `drift.validateTraces`
+
+Permission: `drift.validateTraces`. Requires the trusted host-side Drift integration; read-only and
+does not contact a model.
+
+```ts
+{
+  paths: string[]; // 1–32 unique project-relative `.jsonl` candidates
+}
+
+// response
+{
+  paths: string[]; // ordered subset accepted by native `drift validate`
+}
+```
+
+The server canonicalizes every candidate to a regular file beneath the frame-bound project and runs
+fixed, isolated, five-second native validation in groups of four. It returns paths only—never trace
+contents or validator diagnostics. Plugins use this result to prevent arbitrary JSONL, Align
+journals, and raw Codex streams from enabling analysis.
+
 ### `drift.analyze`
 
 Permission: `drift.analyze`. Requires the trusted host-side Drift integration and explicit user
@@ -367,8 +388,8 @@ plugin/project identity, trace path, deterministic report path, ChatGPT subscrip
 disclosure, and project-local create/replace semantics. Cancellation dispatches nothing. Approval
 authorizes one CSRF-protected invocation; plugin code cannot preauthorize future runs.
 
-The server canonicalizes one regular trace beneath the frame-bound project and admits one analysis
-per canonical project path. It creates only real `.drift/reports/` directories beneath that root,
+The server canonicalizes and natively prevalidates one regular trace beneath the frame-bound project
+before any write, then admits one analysis per canonical project path. It creates only real `.drift/reports/` directories beneath that root,
 rejecting symlinks and non-directories, then derives a bounded filename from the trace basename plus
 stable path digest. Existing output must be a regular non-symlink file. Executables, root, output,
 `gpt-5.6-sol`, two attempts, 600-second attempt deadline, sandbox, arguments, environment,

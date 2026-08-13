@@ -163,7 +163,9 @@ Adding a plugin directory is a security decision. Review its manifest and built 
   project, rejects verified initialized state, and returns only freshly verified projected status.
   Drift rendering remains read-only. Its privileged analyzer accepts only one bounded
   project-relative `.jsonl` path after confirmation names trace, derived output, model disclosure,
-  and create/replace behavior. The server canonicalizes the regular input, rejects symlinked/non-directory
+  and create/replace behavior. A separate bounded read-only adapter returns only project paths accepted
+  by native `drift validate`, so arbitrary JSONL cannot enable the action. The server canonicalizes and
+  prevalidates the regular input before writes, rejects symlinked/non-directory
   `.drift/reports/`, admits one run per canonical project, and fixes configured executables,
   `gpt-5.6-sol`, output, argv, environment, and limits. Drift validates before provider use, isolates
   Codex in its read-only observer workspace, atomically writes mode-`0600` output, and revalidates it

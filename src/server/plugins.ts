@@ -159,6 +159,7 @@ export class PluginRegistry {
       }
       case "align.status":
       case "drift.render":
+      case "drift.validateTraces":
       case "drift.analyze":
       case "tree-complete.workspace":
       case "tree-complete.createFork":

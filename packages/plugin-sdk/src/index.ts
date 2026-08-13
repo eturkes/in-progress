@@ -8,6 +8,7 @@ export type Capability =
   | "host.notify"
   | "align.status"
   | "drift.render"
+  | "drift.validateTraces"
   | "drift.analyze"
   | "tree-complete.workspace"
   | "tree-complete.createFork";
@@ -82,6 +83,10 @@ export interface DriftRender {
   text: string;
 }
 
+export interface DriftValidatedTraces {
+  paths: string[];
+}
+
 export type EventKind = "needs-input" | "completed" | "failed" | "system";
 
 export interface NotificationInput {
@@ -110,6 +115,10 @@ export interface PluginMethodMap {
   "host.notify": { params: NotificationInput; result: NotificationEvent };
   "align.status": { params: undefined; result: AlignStatus };
   "drift.render": { params: { path: string }; result: DriftRender };
+  "drift.validateTraces": {
+    params: { paths: string[] };
+    result: DriftValidatedTraces;
+  };
   "drift.analyze": { params: { path: string }; result: DriftRender };
   "tree-complete.workspace": { params: undefined; result: unknown };
   "tree-complete.createFork": {

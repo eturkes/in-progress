@@ -10,7 +10,7 @@
 - Ecosystem plugins = pinned `plugins/{align,drift,preview,tree-complete,turbo-prompt}` Git
   submodules. Static views stay separate; privileged Align/Drift/Tree operations use named host
   adapters, never a generic plugin backend. Align Python/project imports are isolated; Drift analysis
-  = confirmed native project trace → host-derived `.drift/reports/` + fixed Codex; Tree fork inputs
+  = host-native-validated + confirmed project trace → host-derived `.drift/reports/` + fixed Codex; Tree fork inputs
   are validated, then mode/ID-specific trusted-host confirmation gates dispatch.
   `.tree-complete/project.json` owns in-progress's strict project decision model. Codex startup
   preflights its exact raw committed `HEAD`; Tree's worst-case fork admission preserves all readable

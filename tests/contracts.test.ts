@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   AlignSetupRequestSchema,
   DriftAnalyzeRequestSchema,
+  DriftValidateTracesRequestSchema,
   NotificationEventInputSchema,
   PluginManifestSchema,
   PreviewGenerationRequestSchema,
@@ -127,6 +128,20 @@ describe("shared trust-boundary contracts", () => {
     expect(() => DriftAnalyzeRequestSchema.parse({ path: "traces/../run.jsonl" })).toThrow();
     expect(() =>
       DriftAnalyzeRequestSchema.parse({ path: "run.jsonl", output: "/tmp/report" }),
+    ).toThrow();
+  });
+
+  test("Drift validation accepts one bounded set of unique project JSONL candidates", () => {
+    expect(
+      DriftValidateTracesRequestSchema.parse({ paths: ["run.jsonl", "traces/other.jsonl"] }),
+    ).toEqual({ paths: ["run.jsonl", "traces/other.jsonl"] });
+    expect(() =>
+      DriftValidateTracesRequestSchema.parse({ paths: ["run.jsonl", "run.jsonl"] }),
+    ).toThrow();
+    expect(() =>
+      DriftValidateTracesRequestSchema.parse({
+        paths: Array.from({ length: 33 }, (_, index) => `trace-${index}.jsonl`),
+      }),
     ).toThrow();
   });
 

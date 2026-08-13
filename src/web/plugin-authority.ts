@@ -18,6 +18,7 @@ const AUTHORITY_POLICY: Record<PluginCapability, "none" | "drift-analyze" | "tre
   "host.notify": "none",
   "align.status": "none",
   "drift.render": "none",
+  "drift.validateTraces": "none",
   "drift.analyze": "drift-analyze",
   "tree-complete.workspace": "none",
   "tree-complete.createFork": "tree-fork",
