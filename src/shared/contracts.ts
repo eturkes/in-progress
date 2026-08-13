@@ -19,6 +19,7 @@ export const PluginCapabilitySchema = z.enum([
   "host.notify",
   "align.status",
   "drift.render",
+  "drift.analyze",
   "tree-complete.workspace",
   "tree-complete.createFork",
 ]);
@@ -182,6 +183,49 @@ export const AlignSetupRequestSchema = z
 
 export type AlignSetupRequest = z.infer<typeof AlignSetupRequestSchema>;
 
+export const DriftAnalyzeRequestSchema = z
+  .object({
+    path: z
+      .string()
+      .min(1)
+      .max(1_024)
+      .refine((value) => !value.includes("\0"), "Drift trace path cannot contain a null byte")
+      .refine(
+        (value) => !hasLoneSurrogate(value),
+        "Drift trace path cannot contain a lone surrogate",
+      )
+      .refine(
+        (value) =>
+          !value.startsWith("/") &&
+          value
+            .split("/")
+            .every((segment) => segment !== "" && segment !== "." && segment !== ".."),
+        "Drift trace path must be project-relative",
+      )
+      .regex(/\.jsonl$/i, "Drift trace must be JSONL"),
+  })
+  .strict();
+
+export type DriftAnalyzeRequest = z.infer<typeof DriftAnalyzeRequestSchema>;
+
+export function driftReportPath(tracePath: string): string {
+  const basename = tracePath.split("/").at(-1) ?? "trace.jsonl";
+  const stem = basename.replace(/\.jsonl$/i, "");
+  const slug =
+    [...stem]
+      .map((character) => (/^[A-Za-z0-9._-]$/.test(character) ? character : "-"))
+      .join("")
+      .replace(/-+/g, "-")
+      .replace(/^[.-]+|[.-]+$/g, "")
+      .slice(0, 64) || "trace";
+  let digest = 0xcbf29ce484222325n;
+  for (const byte of new TextEncoder().encode(tracePath)) {
+    digest ^= BigInt(byte);
+    digest = BigInt.asUintN(64, digest * 0x100000001b3n);
+  }
+  return `.drift/reports/${slug}-${digest.toString(16).padStart(16, "0")}.drift.json`;
+}
+
 export const PreviewPromptSchema = z
   .string()
   .refine((value) => !value.includes("\0"), "Preview prompt cannot contain a null byte")
@@ -227,6 +271,7 @@ export const PluginRpcRequestSchema = z
       "host.notify",
       "align.status",
       "drift.render",
+      "drift.analyze",
       "tree-complete.workspace",
       "tree-complete.createFork",
     ]),

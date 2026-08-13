@@ -2,12 +2,15 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   chmodSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import { driftReportPath } from "../src/shared/contracts";
 import { configForTests } from "../src/server/config";
 import { IntegrationRegistry } from "../src/server/integrations";
 import { runBounded } from "../src/server/process";
@@ -30,6 +33,8 @@ function fixture(stage = "candidate_final"): {
   integrations: IntegrationRegistry;
   projectRoot: string;
   alignRoot: string;
+  drift: string;
+  codex: string;
 } {
   const projectRoot = join(root("integration-project"), "workspace's boundary");
   mkdirSync(projectRoot);
@@ -53,17 +58,35 @@ function fixture(stage = "candidate_final"): {
     ].join("\n"),
   );
 
-  const drift = join(root("integration-drift"), "drift");
+  const driftRoot = root("integration-drift");
+  const drift = join(driftRoot, "drift");
+  const codex = join(driftRoot, "codex");
+  writeFileSync(codex, "#!/bin/sh\nexit 0\n");
+  chmodSync(codex, 0o755);
   writeFileSync(
     drift,
-    '#!/bin/sh\n[ "$1" = render ] || exit 2\nprintf \'INSPECT — validated %s\\n\' "$2"\n',
+    [
+      "#!/bin/sh",
+      'if [ "$1" = render ]; then',
+      "  printf 'INSPECT — validated %s\\n' \"$2\"",
+      "  exit 0",
+      "fi",
+      '[ "$1" = analyze ] || exit 2',
+      'printf \'%s\\n\' "$@" > "${0%/*}/analyze-argv"',
+      '[ "$2" = --codex ] && [ "$4" = --model ] && [ "$6" = --timeout-seconds ] && [ "$8" = --attempts ] && [ "${10}" = -o ] && [ "${12}" = -- ] || exit 3',
+      'case "${13}" in *slow*) sleep 0.2 ;; *fail*) exit 4 ;; esac',
+      'printf \'{"schema":"fixture"}\\n\' > "${11}"',
+      'chmod 600 "${11}"',
+      "printf 'INSPECT — analyzed %s\\n' \"${13}\"",
+      "",
+    ].join("\n"),
   );
   chmodSync(drift, 0o755);
 
   const config = configForTests(projectRoot, {
     integrations: {
       align: { sourceDirectory: alignRoot, pythonExecutable: "/usr/bin/python3" },
-      drift: { executable: drift },
+      drift: { executable: drift, codexExecutable: codex },
     },
   });
   const projects = new ProjectRegistry(config.projects);
@@ -71,6 +94,8 @@ function fixture(stage = "candidate_final"): {
     integrations: new IntegrationRegistry(config.integrations, projects, config.dataDir),
     projectRoot,
     alignRoot,
+    drift,
+    codex,
   };
 }
 
@@ -410,6 +435,93 @@ describe("fixed integration adapters", () => {
     ).rejects.toThrow("Drift report must be JSON");
   });
 
+  test("analyzes one canonical Drift trace into a host-derived private report", async () => {
+    const { integrations, projectRoot, drift, codex } = fixture();
+    const tracePath = "traces/session one.jsonl";
+    mkdirSync(join(projectRoot, "traces"));
+    writeFileSync(join(projectRoot, tracePath), '{"kind":"session"}\n');
+
+    const analyzed = await integrations.dispatch("fixture", "drift.analyze", { path: tracePath });
+    const reportPath = driftReportPath(tracePath);
+
+    expect(analyzed).toEqual({
+      path: reportPath,
+      text: expect.stringContaining("INSPECT — validated"),
+    });
+    expect(JSON.parse(readFileSync(join(projectRoot, reportPath), "utf8"))).toEqual({
+      schema: "fixture",
+    });
+    expect(statSync(join(projectRoot, reportPath)).mode & 0o777).toBe(0o600);
+    expect(lstatSync(join(projectRoot, ".drift")).isSymbolicLink()).toBe(false);
+    expect(lstatSync(join(projectRoot, ".drift/reports")).isDirectory()).toBe(true);
+    expect(readFileSync(join(drift, "../analyze-argv"), "utf8").trim().split("\n")).toEqual([
+      "analyze",
+      "--codex",
+      codex,
+      "--model",
+      "gpt-5.6-sol",
+      "--timeout-seconds",
+      "600",
+      "--attempts",
+      "2",
+      "-o",
+      join(projectRoot, reportPath),
+      "--",
+      join(projectRoot, tracePath),
+    ]);
+  });
+
+  test("serializes Drift analyses per canonical project and releases admission after failure", async () => {
+    const { integrations, projectRoot } = fixture();
+    writeFileSync(join(projectRoot, "slow.jsonl"), '{"kind":"session"}\n');
+    writeFileSync(join(projectRoot, "fail.jsonl"), '{"kind":"session"}\n');
+    const first = integrations.dispatch("fixture", "drift.analyze", { path: "slow.jsonl" });
+    await Bun.sleep(20);
+
+    await expect(
+      integrations.dispatch("fixture", "drift.analyze", { path: "slow.jsonl" }),
+    ).rejects.toThrow("already being analyzed");
+    await expect(first).resolves.toMatchObject({ path: driftReportPath("slow.jsonl") });
+    await expect(
+      integrations.dispatch("fixture", "drift.analyze", { path: "fail.jsonl" }),
+    ).rejects.toThrow("rejected the project state");
+    await expect(
+      integrations.dispatch("fixture", "drift.analyze", { path: "slow.jsonl" }),
+    ).resolves.toMatchObject({ path: driftReportPath("slow.jsonl") });
+  });
+
+  test("rejects escaping traces and symlinked Drift report directories before analysis", async () => {
+    const { integrations, projectRoot, drift } = fixture();
+    const outside = root("drift-output-outside");
+    writeFileSync(join(projectRoot, "run.jsonl"), '{"kind":"session"}\n');
+    symlinkSync(outside, join(projectRoot, ".drift"));
+
+    await expect(
+      integrations.dispatch("fixture", "drift.analyze", { path: "run.jsonl" }),
+    ).rejects.toThrow("Drift report directory is unsafe");
+    await expect(
+      integrations.dispatch("fixture", "drift.analyze", { path: "../outside.jsonl" }),
+    ).rejects.toThrow("project-relative");
+    expect(existsSync(join(drift, "../analyze-argv"))).toBe(false);
+  });
+
+  test("rejects a symlinked Drift report destination before analysis", async () => {
+    const { integrations, projectRoot, drift } = fixture();
+    const tracePath = "run.jsonl";
+    const reportPath = driftReportPath(tracePath);
+    const outside = join(root("drift-report-outside"), "report.json");
+    writeFileSync(join(projectRoot, tracePath), '{"kind":"session"}\n');
+    mkdirSync(join(projectRoot, ".drift/reports"), { recursive: true });
+    writeFileSync(outside, "outside\n");
+    symlinkSync(outside, join(projectRoot, reportPath));
+
+    await expect(
+      integrations.dispatch("fixture", "drift.analyze", { path: tracePath }),
+    ).rejects.toThrow("Drift report destination is unsafe");
+    expect(readFileSync(outside, "utf8")).toBe("outside\n");
+    expect(existsSync(join(drift, "../analyze-argv"))).toBe(false);
+  });
+
   test("suppresses a persisted Align stage outside the current CLI protocol", async () => {
     const { integrations } = fixture("candidate final; echo injected");
 
@@ -435,6 +547,9 @@ describe("fixed integration adapters", () => {
     ).rejects.toThrow("not configured");
     await expect(
       integrations.dispatch("fixture", "drift.render", { path: "report.json" }),
+    ).rejects.toThrow("not configured");
+    await expect(
+      integrations.dispatch("fixture", "drift.analyze", { path: "trace.jsonl" }),
     ).rejects.toThrow("not configured");
   });
 

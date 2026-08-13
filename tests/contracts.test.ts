@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
   AlignSetupRequestSchema,
+  DriftAnalyzeRequestSchema,
   NotificationEventInputSchema,
   PluginManifestSchema,
   PreviewGenerationRequestSchema,
   PreviewSettingsRequestSchema,
+  driftReportPath,
 } from "../src/shared/contracts";
 import { DEVELOPMENT_CSP_NONCE_PLACEHOLDER } from "../src/shared/development";
 import { developmentProxyTarget } from "../src/server/app";
@@ -110,6 +112,21 @@ describe("shared trust-boundary contracts", () => {
     ).toThrow();
     expect(() =>
       PreviewSettingsRequestSchema.parse({ mode: "automatic", prompt: "", path: "/tmp" }),
+    ).toThrow();
+  });
+
+  test("Drift analysis accepts one bounded JSONL trace and derives a stable private report path", () => {
+    const request = DriftAnalyzeRequestSchema.parse({ path: "traces/session one.jsonl" });
+    const report = driftReportPath(request.path);
+
+    expect(report).toBe(".drift/reports/session-one-299d3458606ab558.drift.json");
+    expect(driftReportPath(request.path)).toBe(report);
+    expect(driftReportPath("other/session one.jsonl")).not.toBe(report);
+    expect(() => DriftAnalyzeRequestSchema.parse({ path: "report.json" })).toThrow();
+    expect(() => DriftAnalyzeRequestSchema.parse({ path: "/tmp/run.jsonl" })).toThrow();
+    expect(() => DriftAnalyzeRequestSchema.parse({ path: "traces/../run.jsonl" })).toThrow();
+    expect(() =>
+      DriftAnalyzeRequestSchema.parse({ path: "run.jsonl", output: "/tmp/report" }),
     ).toThrow();
   });
 
@@ -377,6 +394,49 @@ describe("shared trust-boundary contracts", () => {
     expect(prompts[0]).toMatch(
       /codex --yolo.*unsandboxed.*OS user.*anything.*Git branch\/worktree.*commit/s,
     );
+  });
+
+  test("Drift analysis requires trusted disclosure and project-write confirmation", () => {
+    const prompts: string[] = [];
+    const confirm = (message: string) => {
+      prompts.push(message);
+      return false;
+    };
+
+    expect(
+      authorizePluginRequest(
+        "drift.analyze",
+        { path: "traces/run.jsonl" },
+        "Drift",
+        "drift",
+        "Fixture",
+        "fixture",
+        "preview",
+        confirm,
+      ),
+    ).toEqual({ allowed: false, error: "Drift analysis canceled by the user" });
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toMatch(/Plugin: Drift.*Project: Fixture/s);
+    expect(prompts[0]).toMatch(
+      /Trace: traces\/run\.jsonl.*\.drift\/reports\/run-[0-9a-f]{16}\.drift\.json/s,
+    );
+    expect(prompts[0]).toMatch(/gpt-5\.6-sol.*ChatGPT subscription.*OpenAI/s);
+    expect(prompts[0]).toMatch(/create or replace.*project.*trace.*report/s);
+
+    prompts.length = 0;
+    expect(
+      authorizePluginRequest(
+        "drift.analyze",
+        { path: "report.json" },
+        "Drift",
+        "drift",
+        "Fixture",
+        "fixture",
+        "preview",
+        confirm,
+      ),
+    ).toEqual({ allowed: false, error: "Invalid Drift trace request" });
+    expect(prompts).toHaveLength(0);
   });
 
   test("rejects malformed Tree fork requests before prompting and escapes hostile labels", () => {

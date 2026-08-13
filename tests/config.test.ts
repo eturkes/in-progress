@@ -67,7 +67,7 @@ describe("loadConfig", () => {
       pluginDirectories: ["./plugins"],
       integrations: {
         align: { sourceDirectory: "./align", pythonExecutable: drift },
-        drift: { executable: "./drift" },
+        drift: { executable: "./drift", codexExecutable: "./drift" },
         preview: {
           sourceDirectory: "./preview",
           artifactDirectory: "./preview-artifacts",
@@ -94,7 +94,7 @@ describe("loadConfig", () => {
         sourceDirectory: realpathSync(align),
         pythonExecutable: realpathSync(drift),
       },
-      drift: { executable: realpathSync(drift) },
+      drift: { executable: realpathSync(drift), codexExecutable: realpathSync(drift) },
       preview: {
         sourceDirectory: realpathSync(preview),
         executable: realpathSync(join(preview, "bin/preview")),

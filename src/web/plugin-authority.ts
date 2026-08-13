@@ -1,14 +1,16 @@
 import {
+  DriftAnalyzeRequestSchema,
   TreeForkRequestSchema,
   type PluginCapability,
   type TreeForkRequest,
+  driftReportPath,
 } from "../shared/contracts";
 
 export type PluginAuthorityDecision =
   | { allowed: true; params: unknown }
   | { allowed: false; error: string };
 
-const AUTHORITY_POLICY: Record<PluginCapability, "none" | "tree-fork"> = {
+const AUTHORITY_POLICY: Record<PluginCapability, "none" | "drift-analyze" | "tree-fork"> = {
   "project.metadata": "none",
   "project.tree": "none",
   "project.readText": "none",
@@ -16,6 +18,7 @@ const AUTHORITY_POLICY: Record<PluginCapability, "none" | "tree-fork"> = {
   "host.notify": "none",
   "align.status": "none",
   "drift.render": "none",
+  "drift.analyze": "drift-analyze",
   "tree-complete.workspace": "none",
   "tree-complete.createFork": "tree-fork",
 };
@@ -66,6 +69,31 @@ export function confirmTreeForkRequest(
   return confirm(`Tree Complete fork request\n\n${identity}\n\n${authority}\n\nContinue?`);
 }
 
+function confirmDriftAnalysis(
+  pluginName: string,
+  pluginId: string,
+  projectName: string,
+  projectId: string,
+  tracePath: string,
+  confirm: (message: string) => boolean,
+): boolean {
+  const identity = [
+    `Plugin: ${visibleLabel(pluginName)}`,
+    `Plugin ID: ${visibleId(pluginId)}`,
+    `Project: ${visibleLabel(projectName)}`,
+    `Project ID: ${visibleId(projectId)}`,
+    `Trace: ${visibleLabel(tracePath)}`,
+    `Report: ${visibleLabel(driftReportPath(tracePath))}`,
+  ].join("\n");
+  return confirm(
+    `Drift trace analysis\n\n${identity}\n\n` +
+      "This runs gpt-5.6-sol through authenticated Codex using your ChatGPT subscription. " +
+      "Trace content is sent to OpenAI and may contain source, terminal output, personal data, or secrets.\n\n" +
+      "Drift will create or replace the report inside the selected project. The trace is embedded in that report.\n\n" +
+      "Continue?",
+  );
+}
+
 export function authorizePluginRequest(
   method: PluginCapability,
   params: unknown,
@@ -76,7 +104,25 @@ export function authorizePluginRequest(
   mode: "preview" | "codex" | null,
   confirm: (message: string) => boolean,
 ): PluginAuthorityDecision {
-  if (AUTHORITY_POLICY[method] === "none") return { allowed: true, params };
+  const policy = AUTHORITY_POLICY[method];
+  if (policy === "none") return { allowed: true, params };
+  if (policy === "drift-analyze") {
+    const request = DriftAnalyzeRequestSchema.safeParse(params);
+    if (!request.success) return { allowed: false, error: "Invalid Drift trace request" };
+    if (
+      !confirmDriftAnalysis(
+        pluginName,
+        pluginId,
+        projectName,
+        projectId,
+        request.data.path,
+        confirm,
+      )
+    ) {
+      return { allowed: false, error: "Drift analysis canceled by the user" };
+    }
+    return { allowed: true, params: request.data };
+  }
   const request = TreeForkRequestSchema.safeParse(params);
   if (!request.success) {
     return { allowed: false, error: "Invalid Tree Complete fork request" };

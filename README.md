@@ -140,7 +140,7 @@ pnpm dev:ecosystem
 | View          | Project-bound behavior                                                        | Host authority                         |
 | ------------- | ----------------------------------------------------------------------------- | -------------------------------------- |
 | Align         | Compact verified lifecycle, one-click setup, and next action                  | Fixed status + local initialization    |
-| Drift         | Discovers candidate report JSON; renders only native-validator-clean reports  | Fixed `drift render`                   |
+| Drift         | Analyzes project trace JSONL; renders only native-validator-clean reports     | Confirmed fixed analyze + render       |
 | Preview       | Selects, generates, or updates the active project's validated dashboard       | Fixed read-only Codex authoring        |
 | Tree Complete | Explores/forks project-identified decision lineage; default simulates locally | Narrow embedded workspace/fork service |
 | Turbo Prompt  | Builds prompts from host-bound metadata, tree, instructions, and manifests    | Bounded project reads                  |
@@ -163,6 +163,12 @@ project-local write, and freezes it verbatim with the current repository snapsho
 send only that bounded UTF-8 text; the host fixes the selected root/name, trusted Align source and
 Python, `user` authority, and `in_progress` stage. Setup writes `.align` locally, contacts no model or
 external service, rejects an existing baseline, and reloads the verified lifecycle view after success.
+
+In the Drift view, **Analyze trace** accepts one discovered native `drift.trace/v1` JSONL file. Trusted
+host confirmation names the selected trace and deterministic `.drift/reports/*.drift.json` destination
+immediately before local writes and model use. The host fixes the project, binaries, `gpt-5.6-sol`,
+arguments, limits, and destination; one analysis runs per canonical project. Trace content reaches
+OpenAI through authenticated Codex and remains embedded in the mode-`0600` report—redact before use.
 
 In the Preview view, **Generate Preview** creates the external dashboard. **Update Preview** supplies
 the prior validated declarative model as continuity while re-verifying it against current source;

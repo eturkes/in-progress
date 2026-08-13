@@ -76,6 +76,8 @@ describe("ProjectRegistry filesystem boundary", () => {
     writeFileSync(join(directory, "plugins", "nested", "source.ts"), "hidden");
     mkdirSync(join(directory, "src"));
     writeFileSync(join(directory, "src", "main.ts"), "export {};\n");
+    mkdirSync(join(directory, "target", "debug"), { recursive: true });
+    writeFileSync(join(directory, "target", "debug", "artifact.json"), "{}\n");
     writeFileSync(join(directory, "README.md"), "visible\n");
     const registry = new ProjectRegistry([fixtureProject(directory)]);
 
@@ -85,6 +87,7 @@ describe("ProjectRegistry filesystem boundary", () => {
     expect(tree.map((entry) => entry.path)).toContain("src/main.ts");
     expect(tree.map((entry) => entry.path)).toContain("plugins/nested");
     expect(tree.some((entry) => entry.path.startsWith(".git"))).toBeFalse();
+    expect(tree.some((entry) => entry.path.startsWith("target"))).toBeFalse();
     expect(tree.map((entry) => entry.path)).not.toContain("plugins/nested/source.ts");
   });
 

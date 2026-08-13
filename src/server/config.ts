@@ -41,7 +41,10 @@ const RawConfigSchema = z
           .strict()
           .optional(),
         drift: z
-          .object({ executable: z.string().min(1) })
+          .object({
+            executable: z.string().min(1),
+            codexExecutable: z.string().min(1).default("/usr/bin/codex"),
+          })
           .strict()
           .optional(),
         preview: z
@@ -110,7 +113,7 @@ export interface InProgressConfig {
   pluginDirectories: string[];
   integrations: {
     align?: { sourceDirectory: string; pythonExecutable: string };
-    drift?: { executable: string };
+    drift?: { executable: string; codexExecutable: string };
     preview?: {
       sourceDirectory: string;
       executable: string;
@@ -297,6 +300,11 @@ export async function loadConfig(
                 rootDir,
                 parsed.integrations.drift.executable,
                 "Drift executable",
+              ),
+              codexExecutable: resolveExecutable(
+                rootDir,
+                parsed.integrations.drift.codexExecutable,
+                "Drift Codex executable",
               ),
             },
           }

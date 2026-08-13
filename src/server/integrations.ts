@@ -1,10 +1,13 @@
-import { join } from "node:path";
+import { lstat, mkdir, realpath } from "node:fs/promises";
+import { isAbsolute, join, relative, sep } from "node:path";
 import { z } from "zod";
 import {
+  DriftAnalyzeRequestSchema,
   TreeForkRequestSchema,
   type AlignSetupRequest,
   type AlignStatus,
   type DriftRender,
+  driftReportPath,
 } from "../shared/contracts";
 import type { InProgressConfig } from "./config";
 import { runBounded } from "./process";
@@ -181,6 +184,10 @@ const ISOLATED_TOOL_ENV = {
   LC_ALL: "C.UTF-8",
   PATH: "/usr/bin:/bin",
 };
+const DRIFT_ANALYZE_TIMEOUT_MS = 20 * 60_000 + 30_000;
+const DRIFT_ATTEMPTS = 2;
+const DRIFT_MODEL = "gpt-5.6-sol";
+const DRIFT_OBSERVER_TIMEOUT_SECONDS = 600;
 
 const ALIGN_BOOTSTRAP = [
   "import runpy,sys",
@@ -210,9 +217,58 @@ function localProjectText(text: string, projectPath: string): string {
     .replaceAll("$'\\x2e'", ".");
 }
 
+function errorCode(error: unknown): string | undefined {
+  return typeof error === "object" && error !== null && "code" in error
+    ? String(Reflect.get(error, "code"))
+    : undefined;
+}
+
+function pathWithin(root: string, candidate: string): boolean {
+  const path = relative(root, candidate);
+  return path === "" || (!path.startsWith(`..${sep}`) && path !== ".." && !isAbsolute(path));
+}
+
+async function ensureDriftReportDirectory(projectRoot: string): Promise<string> {
+  let current = projectRoot;
+  for (const segment of [".drift", "reports"]) {
+    const candidate = join(current, segment);
+    let info;
+    try {
+      info = await lstat(candidate);
+    } catch (error) {
+      if (errorCode(error) !== "ENOENT") {
+        throw new HttpError(502, "Drift report directory is unavailable");
+      }
+      try {
+        await mkdir(candidate, { mode: 0o700 });
+        info = await lstat(candidate);
+      } catch (createError) {
+        if (errorCode(createError) !== "EEXIST") {
+          throw new HttpError(502, "Drift report directory could not be created");
+        }
+        info = await lstat(candidate).catch(() => {
+          throw new HttpError(409, "Drift report directory is unsafe");
+        });
+      }
+    }
+    if (info.isSymbolicLink() || !info.isDirectory()) {
+      throw new HttpError(409, "Drift report directory is unsafe");
+    }
+    const canonical = await realpath(candidate).catch(() => {
+      throw new HttpError(409, "Drift report directory is unsafe");
+    });
+    if (!pathWithin(projectRoot, canonical)) {
+      throw new HttpError(409, "Drift report directory is unsafe");
+    }
+    current = canonical;
+  }
+  return current;
+}
+
 export class IntegrationRegistry {
   readonly #treeServices = new Map<string, Promise<TreeCompleteService>>();
   readonly #alignInitializations = new Map<string, Promise<AlignStatus>>();
+  readonly #driftAnalyses = new Map<string, Promise<DriftRender>>();
   #closed = false;
   #closing: Promise<void> | null = null;
 
@@ -227,6 +283,7 @@ export class IntegrationRegistry {
     method:
       | "align.status"
       | "drift.render"
+      | "drift.analyze"
       | "tree-complete.workspace"
       | "tree-complete.createFork",
     params: unknown,
@@ -239,6 +296,8 @@ export class IntegrationRegistry {
       }
       case "drift.render":
         return await this.#driftRender(projectId, params);
+      case "drift.analyze":
+        return await this.#driftAnalyze(projectId, params);
       case "tree-complete.workspace": {
         z.undefined().parse(params);
         return await this.#treeWorkspace(projectId);
@@ -388,6 +447,65 @@ export class IntegrationRegistry {
     return { path: params.path, text: stdout };
   }
 
+  async #driftAnalyze(projectId: string, rawParams: unknown): Promise<DriftRender> {
+    if (this.#closed) throw new HttpError(503, "Integration registry is closed");
+    const projectKey = this.projects.get(projectId).path;
+    if (this.#driftAnalyses.has(projectKey)) {
+      throw new HttpError(409, "A Drift trace is already being analyzed for this project");
+    }
+    const operation = this.#runDriftAnalysis(projectId, rawParams);
+    let tracked: Promise<DriftRender>;
+    tracked = operation.finally(() => {
+      if (this.#driftAnalyses.get(projectKey) === tracked) this.#driftAnalyses.delete(projectKey);
+    });
+    this.#driftAnalyses.set(projectKey, tracked);
+    return await tracked;
+  }
+
+  async #runDriftAnalysis(projectId: string, rawParams: unknown): Promise<DriftRender> {
+    const integration = this.config.drift;
+    if (!integration) throw new HttpError(503, "Drift integration is not configured");
+    const params = DriftAnalyzeRequestSchema.parse(rawParams);
+    const project = this.projects.get(projectId);
+    const trace = await this.projects.resolveFile(projectId, params.path);
+    const reportPath = driftReportPath(params.path);
+    const reportDirectory = await ensureDriftReportDirectory(project.path);
+    const report = join(reportDirectory, reportPath.split("/").at(-1)!);
+    const existing = await lstat(report).catch((error) => {
+      if (errorCode(error) === "ENOENT") return null;
+      throw new HttpError(502, "Drift report destination is unavailable");
+    });
+    if (existing && (existing.isSymbolicLink() || !existing.isFile())) {
+      throw new HttpError(409, "Drift report destination is unsafe");
+    }
+    await runBounded(
+      [
+        integration.executable,
+        "analyze",
+        "--codex",
+        integration.codexExecutable,
+        "--model",
+        DRIFT_MODEL,
+        "--timeout-seconds",
+        String(DRIFT_OBSERVER_TIMEOUT_SECONDS),
+        "--attempts",
+        String(DRIFT_ATTEMPTS),
+        "-o",
+        report,
+        "--",
+        trace,
+      ],
+      {
+        cwd: project.path,
+        env: ISOLATED_TOOL_ENV,
+        timeoutMs: DRIFT_ANALYZE_TIMEOUT_MS,
+        stdoutBytes: 1024 * 1024,
+        label: "Drift analysis",
+      },
+    );
+    return await this.#driftRender(projectId, { path: reportPath });
+  }
+
   async #treeWorkspace(projectId: string): Promise<unknown> {
     const project = this.projects.get(projectId);
     const redactions = this.#treeRedactions(project.path);
@@ -477,10 +595,12 @@ export class IntegrationRegistry {
     this.#closed = true;
     const alignInitializations = [...this.#alignInitializations.values()];
     this.#alignInitializations.clear();
+    const driftAnalyses = [...this.#driftAnalyses.values()];
+    this.#driftAnalyses.clear();
     const pending = [...this.#treeServices.values()];
     this.#treeServices.clear();
     this.#closing = (async () => {
-      await Promise.allSettled(alignInitializations);
+      await Promise.allSettled([...alignInitializations, ...driftAnalyses]);
       const services = await Promise.allSettled(pending);
       const failures: unknown[] = services.flatMap((result) =>
         result.status === "rejected" ? [result.reason] : [],

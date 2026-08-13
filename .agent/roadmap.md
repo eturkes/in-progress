@@ -29,6 +29,7 @@ Browser + phone-ready personal agent control plane: durable project PTYs, projec
 - [x] Survey Align, Drift, Preview, Tree Complete, Turbo Prompt contracts + trust boundaries
 - [x] Specify fixed Align/Drift adapters + bounded typed RPC
 - [x] Package Align/Drift static views
+- [x] Add confirmed project-trace analysis + deterministic Drift report publication
 - [x] Package Preview snapshots into one project-selecting static view
 - [x] Adapt Turbo Prompt to host-bound project analysis
 - [x] Expose Tree Complete as a project-bound embedded service + static client

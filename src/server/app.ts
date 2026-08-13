@@ -290,6 +290,7 @@ export function createControlPlane(config: InProgressConfig, options: AppOptions
       if (rpcRoute && request.method === "POST") {
         security.assertBrowserMutation(request);
         const rpc = PluginRpcRequestSchema.parse(await jsonBody(request));
+        if (rpc.method === "drift.analyze") bunServer.timeout(request, 21 * 60);
         const result = await plugins.dispatch(
           rpcRoute[1]!,
           rpcRoute[2]!,

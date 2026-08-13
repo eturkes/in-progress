@@ -136,8 +136,8 @@ The only authority is one accepted `MessagePort` for one plugin + selected proje
 - reuses one random init nonce, accepts the first matching reply, and closes every other attempt;
 - validates every message shape and timeout;
 - checks the manifest capability on every method;
-- validates Tree Complete's three fork IDs before showing a mode/ID-specific trusted-host
-  confirmation with stable plugin/project IDs immediately before every request;
+- validates Drift's trace path and Tree Complete's three fork IDs before showing operation-specific
+  trusted-host confirmation with stable plugin/project IDs immediately before every privileged request;
 - takes project identity from trusted frame state, never plugin parameters;
 - validates/canonicalizes paths again server-side;
 - closes the port on navigation/project change/disposal and never reconnects a navigated frame.
@@ -161,9 +161,15 @@ Adding a plugin directory is a security decision. Review its manifest and built 
   accepts only exact bounded intent over stdin; root/name, authority, stage, executable, and argv stay
   host-fixed. It confirms immediately before creating project-local `.align`, serializes setup per
   project, rejects verified initialized state, and returns only freshly verified projected status.
-  Both adapters use fixed argv,
-  detached process groups, hard deadlines, output caps, UTF-8/schema checks, and no shell. Plugins
-  cannot choose commands, roots, models, or mutating analyzer operations.
+  Drift rendering remains read-only. Its privileged analyzer accepts only one bounded
+  project-relative `.jsonl` path after confirmation names trace, derived output, model disclosure,
+  and create/replace behavior. The server canonicalizes the regular input, rejects symlinked/non-directory
+  `.drift/reports/`, admits one run per canonical project, and fixes configured executables,
+  `gpt-5.6-sol`, output, argv, environment, and limits. Drift validates before provider use, isolates
+  Codex in its read-only observer workspace, atomically writes mode-`0600` output, and revalidates it
+  before return. Trace content reaches OpenAI and remains embedded in the report. Both adapters use
+  fixed argv, detached process groups, hard deadlines, output caps, UTF-8/schema checks, and no shell.
+  Plugins cannot choose commands, roots, models, output paths, or arbitrary analyzer options.
 - Preview executable, Codex executable, selected canonical project, external artifact root, model,
   effort, sandbox, schema, and aggregate source map come only from canonical host configuration and
   code. The browser can send only a bounded direction plus update/fresh and manual/automatic enums;

@@ -9,8 +9,9 @@
 - Runtime state = project-local ignored `.data/in-progress.db` plus integration-owned subtrees; no cloud account or external database.
 - Ecosystem plugins = pinned `plugins/{align,drift,preview,tree-complete,turbo-prompt}` Git
   submodules. Static views stay separate; privileged Align/Drift/Tree operations use named host
-  adapters, never a generic plugin backend. Align Python/project imports are isolated; Tree fork
-  inputs are validated, then mode/ID-specific trusted-host confirmation gates dispatch.
+  adapters, never a generic plugin backend. Align Python/project imports are isolated; Drift analysis
+  = confirmed native project trace → host-derived `.drift/reports/` + fixed Codex; Tree fork inputs
+  are validated, then mode/ID-specific trusted-host confirmation gates dispatch.
   `.tree-complete/project.json` owns in-progress's strict project decision model. Codex startup
   preflights its exact raw committed `HEAD`; Tree's worst-case fork admission preserves all readable
   history below the shared 4 MiB response boundary and rejects before over-budget reservation.

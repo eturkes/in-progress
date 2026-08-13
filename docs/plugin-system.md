@@ -159,7 +159,8 @@ The initialization context exposes only the identity needed to label the selecte
 
 ## SDK
 
-`@in-progress/plugin-sdk` implements handshake, version/capability checks, 15-second RPC timeouts, disposal, and typed context:
+`@in-progress/plugin-sdk` implements handshake, version/capability checks, disposal, typed context,
+15-second ordinary RPC deadlines, and the fixed 21-minute `drift.analyze` deadline:
 
 ```ts
 import { connectInProgress } from "@in-progress/plugin-sdk";
@@ -350,6 +351,44 @@ Align owns the on-disk transaction. A native crash or forced timeout can leave f
 `.align` state; the host never deletes, replaces, or guesses how to repair it. Inspect that state in
 the project before any manual recovery.
 
+### `drift.analyze`
+
+Permission: `drift.analyze`. Requires the trusted host-side Drift integration and explicit user
+action in the plugin UI.
+
+```ts
+{
+  path: string;
+} // project-relative native `drift.trace/v1` `.jsonl`
+```
+
+The trusted host validates this exact request before presenting a confirmation containing stable
+plugin/project identity, trace path, deterministic report path, ChatGPT subscription use, OpenAI
+disclosure, and project-local create/replace semantics. Cancellation dispatches nothing. Approval
+authorizes one CSRF-protected invocation; plugin code cannot preauthorize future runs.
+
+The server canonicalizes one regular trace beneath the frame-bound project and admits one analysis
+per canonical project path. It creates only real `.drift/reports/` directories beneath that root,
+rejecting symlinks and non-directories, then derives a bounded filename from the trace basename plus
+stable path digest. Existing output must be a regular non-symlink file. Executables, root, output,
+`gpt-5.6-sol`, two attempts, 600-second attempt deadline, sandbox, arguments, environment,
+20.5-minute process deadline, and output limits stay host-fixed. Drift validates before model use, invokes authenticated Codex in
+its isolated read-only observer workspace, atomically writes a mode-`0600` self-contained report,
+then revalidates it through `drift render` before returning:
+
+```ts
+{
+  path: string; // derived `.drift/reports/*.drift.json`
+  text: string; // native validated rendering
+}
+```
+
+Trace contents may reach OpenAI and remain embedded in the local report. A browser disconnect does
+not cancel an admitted host operation; returning to Drift and rescanning discovers a completed
+report. Native failure after directory creation may leave empty `.drift/reports/`; failure after
+atomic report publication may leave a valid report discoverable even if the final host response
+fails.
+
 ### `drift.render`
 
 Permission: `drift.render`. Requires the trusted host-side Drift integration.
@@ -372,7 +411,7 @@ Drift exits successfully and therefore revalidates the self-contained report:
 ```
 
 Plugins usually combine this with `project.tree` to discover candidate reports. They cannot pass
-raw CLI arguments, traces, model options, or paths outside the selected project.
+raw CLI arguments, model options, or paths outside the selected project.
 
 ### `tree-complete.workspace`
 

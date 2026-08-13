@@ -6,7 +6,7 @@ import type { ProjectConfig } from "./config";
 import { runBounded } from "./process";
 import { HttpError } from "./security";
 
-const TREE_SKIP = new Set([".git", ".data", "node_modules", "dist", "coverage"]);
+const TREE_SKIP = new Set([".git", ".data", "node_modules", "dist", "target", "coverage"]);
 const GIT_STATUS_ENV = {
   GIT_CONFIG_GLOBAL: "/dev/null",
   GIT_CONFIG_NOSYSTEM: "1",

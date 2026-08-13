@@ -8,6 +8,7 @@ export type Capability =
   | "host.notify"
   | "align.status"
   | "drift.render"
+  | "drift.analyze"
   | "tree-complete.workspace"
   | "tree-complete.createFork";
 
@@ -109,6 +110,7 @@ export interface PluginMethodMap {
   "host.notify": { params: NotificationInput; result: NotificationEvent };
   "align.status": { params: undefined; result: AlignStatus };
   "drift.render": { params: { path: string }; result: DriftRender };
+  "drift.analyze": { params: { path: string }; result: DriftRender };
   "tree-complete.workspace": { params: undefined; result: unknown };
   "tree-complete.createFork": {
     params: { baseVersionId: string; decisionId: string; alternativeId: string };
@@ -178,11 +180,12 @@ export class InProgressClient {
     }
     const params = args[0];
     const id = crypto.randomUUID();
+    const timeoutMs = method === "drift.analyze" ? 21 * 60_000 : 15_000;
     return new Promise<PluginMethodMap[M]["result"]>((resolve, reject) => {
       const timer = window.setTimeout(() => {
         this.#pending.delete(id);
         reject(new Error(`RPC timed out: ${method}`));
-      }, 15_000);
+      }, timeoutMs);
       this.#pending.set(id, {
         resolve: resolve as (value: unknown) => void,
         reject,
