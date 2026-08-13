@@ -22,11 +22,12 @@ import {
   secureHeaders,
 } from "./security";
 import { StateStore } from "./store";
-import { TerminalManager, type TerminalSocketData } from "./terminal";
+import { TerminalManager, type TerminalManagerOptions, type TerminalSocketData } from "./terminal";
 
 interface AppOptions {
   memoryStore?: boolean;
   port?: number;
+  terminal?: TerminalManagerOptions;
 }
 
 function api(data: unknown, init: ResponseInit = {}): Response {
@@ -77,7 +78,7 @@ export function createControlPlane(config: InProgressConfig, options: AppOptions
     config.server.allowedOrigins,
     config.server.allowedTailscaleUsers,
   );
-  const terminals = new TerminalManager(config, projects, notifications);
+  const terminals = new TerminalManager(config, projects, notifications, options.terminal);
   const webRoot = resolve(config.rootDir, "dist/web");
   const webProxy = process.env.IN_PROGRESS_WEB_PROXY;
   let hookTimes: number[] = [];
@@ -208,7 +209,7 @@ export function createControlPlane(config: InProgressConfig, options: AppOptions
       }
       if (sessionsRoute && request.method === "POST") {
         security.assertBrowserMutation(request);
-        return api({ session: terminals.create(sessionsRoute[1]!) }, { status: 201 });
+        return api({ session: await terminals.create(sessionsRoute[1]!) }, { status: 201 });
       }
 
       const previewRoute = /^\/api\/projects\/([a-z][a-z0-9-]+)\/preview$/.exec(pathname);

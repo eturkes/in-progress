@@ -6,15 +6,17 @@
 | --------------- | --------------------------------------------------------------------------------------------------- |
 | Runtime         | Pinned Bun + TypeScript; one unprivileged process                                                   |
 | HTTP/realtime   | Native `Bun.serve` + native binary WebSockets/SSE                                                   |
-| Terminal        | `Bun.Terminal` PTY per session; xterm.js in the trusted host UI                                     |
+| Terminal        | Named zmx PTY per session; `Bun.Terminal` bridge; xterm.js in the trusted host UI                   |
 | UI              | React/Vite installable PWA; responsive project rail + plugin rail + view pane                       |
-| Persistence     | `bun:sqlite` in `.data/in-progress.db`; PTY processes remain in memory                              |
+| Persistence     | `bun:sqlite` application state + zmx PTY daemons recovered by deterministic ownership names         |
 | Remote boundary | Loopback HTTP behind private Tailscale Serve HTTPS                                                  |
 | Plugins         | Local static directories; forced opaque iframe origin; project-bound `MessageChannel` capabilities  |
 | Integrations    | Optional host-owned fixed adapters for Align, Drift, Preview, and Tree Complete; no generic backend |
 | Notifications   | SQLite inbox + SSE foreground delivery + VAPID Web Push background delivery                         |
 
-The Bun primitives remove native addons and extra daemons: `Bun.spawn` attaches a real PTY, `Bun.serve` owns HTTP/WebSocket lifecycle and limits, and `bun:sqlite` supplies a synchronous embedded database. Primary references: [PTY](https://bun.sh/docs/runtime/child-process#terminal-pty-support), [WebSockets](https://bun.sh/docs/runtime/http/websockets), [SQLite](https://bun.sh/docs/runtime/sqlite).
+Bun keeps the host bridge addon-free: `Bun.spawn` attaches the zmx client to a real outer PTY,
+`Bun.serve` owns HTTP/WebSocket lifecycle and limits, and `bun:sqlite` supplies a synchronous embedded
+database. zmx owns one daemon and inner PTY per live Terminal. Primary references: [zmx](https://github.com/neurosnap/zmx), [PTY](https://bun.sh/docs/runtime/child-process#terminal-pty-support), [WebSockets](https://bun.sh/docs/runtime/http/websockets), [SQLite](https://bun.sh/docs/runtime/sqlite).
 
 ## Frontier execution lab
 
@@ -45,8 +47,11 @@ phone / desktop browser
 │          │                         │                    │              │
 │     Bun.Terminal             local files        bun:sqlite + Push    │
 │          │                                              │             │
-│   shell / coding agent                          browser push service   │
+│   zmx attach client                                  push service      │
 └──────────────────────────────────────────────────────────────────────┘
+           │
+           ▼
+ named zmx daemon + PTY ─ shell / coding agent
 ```
 
 Development substitutes Vite at `IN_PROGRESS_WEB_PROXY=http://127.0.0.1:5173`; authorization, cookie, Tailscale identity, and forwarding headers are stripped before that proxy request. Production serves `dist/web` and SPA-falls back to its `index.html`. API, host, and plugin responses receive distinct cache/CSP/security headers.
@@ -63,7 +68,8 @@ Development substitutes Vite at `IN_PROGRESS_WEB_PROXY=http://127.0.0.1:5173`; a
 6. in Tree Complete Codex mode, load the canonical built preflight and strictly validate each
    project's manifest from exact committed `HEAD`;
 7. require Preview's canonical artifact root to be disjoint from every configured project;
-8. place runtime state in `<config-root>/.data`.
+8. require zmx 0.7.0+ and recover live Terminal names owned by the canonical config path;
+9. place database state in `<config-root>/.data`.
 
 The machine-readable contract is [in-progress-config.schema.json](in-progress-config.schema.json).
 
@@ -83,17 +89,31 @@ confirmation containing configured mode and validated fork IDs.
 
 `POST /api/projects/:project/sessions` creates:
 
-- UUID session ID;
-- `Bun.Terminal` initially sized 100×30 and named `xterm-256color`;
-- configured shell + argument vector, spawned directly without shell interpolation;
+- random 64-bit session ID;
+- explicit `in-progress-<project>-<scope>-s<ordinal>-<session>` zmx name + discovery labels;
+- zmx daemon/inner PTY running the configured shell + argument vector without interpolation;
+- `Bun.Terminal` outer PTY, initially 100×30/`xterm-256color`, attached as one zmx client;
 - working directory fixed to the configured project root;
 - bounded byte replay ring (`terminal.scrollbackBytes`);
-- injected project-scoped notification environment;
+- injected project/Terminal-scoped notification environment;
 - in-memory client map and one writer lease.
 
-Changing project/view or losing the browser connection does **not** kill the PTY. Reattach receives the byte-ring snapshot, then live output. Sessions survive browser reload/network loss only while the in-progress process remains alive; a daemon restart or host reboot ends them. Session metadata and scrollback are intentionally not stored in SQLite.
+Changing project/view or losing the browser connection does **not** kill either PTY. Browser
+reattach receives the bounded Bun byte-ring snapshot, then live output. Graceful in-progress shutdown
+detaches its zmx clients; crash/connection loss also leaves the zmx daemon and shell alive. The next
+process lists the shared `ZMX_DIR`, validates config/project tokens plus the original project root,
+and attaches to each owned live name; zmx supplies its terminal-state/scrollback snapshot. Host reboot,
+explicit deletion, shell exit, or incompatible zmx replacement ends the inner session. A shell that
+exits while in-progress is down disappears without an inbox event. Terminal metadata and bytes remain
+outside SQLite; identity and recovery metadata live in the zmx name, process record, and labels.
 
-Multiple clients may observe one session. The newest attachment owns input/resize; another client sends `claim` to take the writer lease. All clients receive output/status. Explicit delete sends `SIGTERM` and closes the PTY. Process exit creates a `completed`/`failed` event.
+Multiple browser clients may observe one session through one host zmx attachment. The newest browser
+attachment owns input/resize; another client sends `claim` to take the writer lease. All clients
+receive output/status. Explicit delete calls `zmx kill`; ordinary host shutdown only detaches. A tiny
+wrapper reports the configured shell's exit status through private OSC before it exits, preserving
+`completed`/`failed` events despite zmx's attach client not exposing that status. If the host-side
+zmx client detaches or fails while its named daemon remains live, the bridge reattaches with bounded
+backoff and queued browser input remains size-limited.
 
 ### Terminal WebSocket
 
@@ -170,4 +190,4 @@ Persistent data:
 - `push_subscriptions`: endpoint/subscription JSON/timestamps;
 - `events`: newest 2,000 inbox records.
 
-Repositories, terminal bytes, commands, and browser sessions are never written to the database.
+Repositories, terminal bytes, commands, zmx metadata, and browser sessions are never written to the database.

@@ -1,12 +1,13 @@
 # in-progress
 
-Local-first browser control plane for coding agents. Each configured project gets browser-detached Bun PTY sessions; the top rail switches between the trusted terminal and external project views. The React/Vite PWA works on desktop and narrow phone screens, keeps an event inbox, and sends standards-based Web Push notifications.
+Local-first browser control plane for coding agents. Each configured project gets named zmx-backed terminal sessions that survive browser and in-progress restarts; the top rail switches between the trusted terminal and external project views. The React/Vite PWA works on desktop and narrow phone screens, keeps an event inbox, and sends standards-based Web Push notifications.
 
 in-progress is a remote shell. It deliberately binds loopback and expects private HTTPS from [Tailscale Serve](https://tailscale.com/docs/features/tailscale-serve). Never expose it with Tailscale Funnel or a public reverse proxy.
 
 ## Stack
 
 - Bun `1.3.14`: `Bun.serve`, native WebSockets/PTYs, `bun:sqlite`
+- zmx `0.7.0+`: one persistent, named PTY daemon per Terminal session
 - React 19 + Vite 8 PWA + xterm.js 6
 - TypeScript 7, pnpm `11.3.0`
 - External views: local static bundles in opaque-origin sandboxed iframes; versioned `MessageChannel` RPC
@@ -15,7 +16,7 @@ in-progress is a remote shell. It deliberately binds loopback and expects privat
 
 ## Start
 
-Prerequisites: Bun 1.3.14+, Node 24+, pnpm 11.3.0+, Python 3.11+, JDK 26.0.2,
+Prerequisites: Bun 1.3.14+, [zmx](https://github.com/neurosnap/zmx) 0.7.0+, Node 24+, pnpm 11.3.0+, Python 3.11+, JDK 26.0.2,
 Rust/Cargo 1.97.1, Linux x86-64, and optionally Tailscale on the host and phone. Python/Rust build
 the plugin ecosystem; JDK/Rust are used by the frontier gate. Preview generation additionally
 requires a Codex CLI logged in through ChatGPT.
@@ -38,6 +39,12 @@ Open `http://127.0.0.1:4317`. Copy `in-progress.config.json` to `in-progress.con
 ```sh
 IN_PROGRESS_CONFIG=./in-progress.config.local.json pnpm start
 ```
+
+Creating a Terminal creates a discoverable `in-progress-…` zmx session in the server process's
+`ZMX_DIR` namespace. Stopping/restarting in-progress detaches; the next process recovers matching
+live sessions and zmx restores their terminal state. Deleting a Terminal explicitly kills its zmx
+session. in-progress clears inherited `ZMX_SESSION`/`ZMX_SESSION_PREFIX`, so ownership never aliases
+the zmx session used to launch the server.
 
 ### SSH development
 
@@ -87,7 +94,7 @@ Push payloads contain the configured event title/body and deep link. Keep secret
 
 ## Agent notification hooks
 
-Every in-progress shell receives the loopback endpoint, a shared notify-only hook token, and its default project ID; `bin/in-progress-notify` is prepended to `PATH`. Agent hooks can therefore emit inbox + phone events without handling credentials directly:
+Every in-progress shell receives the loopback endpoint, a shared notify-only hook token, its default project ID, and its stable Terminal session ID; `bin/in-progress-notify` is prepended to `PATH`. Agent hooks can therefore emit inbox + phone events without handling credentials directly:
 
 ```sh
 in-progress-notify --kind needs-input --title "Agent is waiting" "Review the proposed migration"
@@ -197,4 +204,4 @@ guarantee](frontier/README.md).
 - [Security and threat model](docs/security.md)
 - [Configuration schema](docs/in-progress-config.schema.json)
 
-Primary runtime references: [Bun PTYs](https://bun.sh/docs/runtime/child-process#terminal-pty-support), [Bun WebSockets](https://bun.sh/docs/runtime/http/websockets), [Bun SQLite](https://bun.sh/docs/runtime/sqlite), [xterm.js security](https://xtermjs.org/docs/guides/security/).
+Primary runtime references: [zmx](https://github.com/neurosnap/zmx), [Bun PTYs](https://bun.sh/docs/runtime/child-process#terminal-pty-support), [Bun WebSockets](https://bun.sh/docs/runtime/http/websockets), [Bun SQLite](https://bun.sh/docs/runtime/sqlite), [xterm.js security](https://xtermjs.org/docs/guides/security/).

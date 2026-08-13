@@ -145,10 +145,11 @@
       "type": "object",
       "additionalProperties": false,
       "default": {},
+      "description": "Named zmx-backed project Terminal sessions.",
       "properties": {
         "shell": {
           "type": "string",
-          "description": "Shell executable. Defaults to SHELL, then /bin/sh."
+          "description": "Inner zmx session shell executable. Defaults to SHELL, then /bin/sh."
         },
         "shellArgs": {
           "type": "array",
@@ -164,7 +165,7 @@
           "minimum": 65536,
           "maximum": 16777216,
           "default": 1048576,
-          "description": "Per-session replay ring size in bytes."
+          "description": "Per-session host replay ring size in bytes; zmx separately owns terminal-state restoration."
         },
         "maxSessionsPerProject": {
           "type": "integer",

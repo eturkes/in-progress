@@ -11,6 +11,14 @@ let origin: string;
 let cookie: string;
 let csrfToken: string;
 
+function testAppOptions(directory: string) {
+  return {
+    memoryStore: true,
+    port: 0,
+    terminal: { terminateOnClose: true, zmxDirectory: join(directory, "zmx") },
+  };
+}
+
 beforeAll(async () => {
   root = tempDirectory("app");
   const config = configForTests(root, {
@@ -24,7 +32,7 @@ beforeAll(async () => {
       maxSessionsPerProject: 2,
     },
   });
-  app = createControlPlane(config, { memoryStore: true, port: 0 });
+  app = createControlPlane(config, testAppOptions(root));
   origin = app.server.url.origin;
   const bootstrap = await fetch(`${origin}/api/bootstrap`);
   const body = (await bootstrap.json()) as { csrfToken: string };
@@ -111,7 +119,7 @@ describe("HTTP bootstrap and terminal authorization", () => {
     });
     const guarded = createControlPlane(
       configForTests(pluginFixture, { pluginDirectories: [pluginRoot] }),
-      { memoryStore: true, port: 0 },
+      testAppOptions(pluginFixture),
     );
     const guardedOrigin = guarded.server.url.origin;
     try {
@@ -187,7 +195,7 @@ describe("HTTP bootstrap and terminal authorization", () => {
           },
         },
       }),
-      { memoryStore: true, port: 0 },
+      testAppOptions(fixture),
     );
     const guardedOrigin = guarded.server.url.origin;
     try {

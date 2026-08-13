@@ -16,7 +16,8 @@ Browser + phone-ready personal agent control plane: durable project PTYs, projec
 
 ## Success criteria
 
-- Project switch never destroys PTY; browser reload reattaches + replays bounded scrollback.
+- Project switch/browser reload/in-progress restart never destroys a live zmx PTY; reattach restores
+  terminal state + bounded host replay. Explicit Terminal deletion owns zmx termination.
 - External plugin code has opaque origin, no ambient cookies/filesystem/API access, and network fetches limited to its static asset prefix; every RPC is declared + project-scoped. Installation trusts the plugin with granted data because self-navigation can disclose it.
 - Server binds loopback by default; mutation endpoints require same-origin session CSRF; WebSocket validates origin + CSRF.
 - Installed PWA can subscribe to standard Web Push and deep-link notification events.

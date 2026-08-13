@@ -183,7 +183,10 @@ Adding a plugin directory is a security decision. Review its manifest and built 
   manifest parsed from raw `HEAD` with replacement/graft/shallow overrides disabled, then runs
   inherited `codex --yolo exec` unsandboxed with the workstation user's full authority. Its
   confirmation states that boundary; approval is authorization, not containment.
-- Running sessions are capped per project.
+- New running sessions are capped per project. Each is a same-user zmx daemon with its own Unix
+  socket and terminal state; inherited `ZMX_SESSION`/`ZMX_SESSION_PREFIX` are cleared before
+  naming or attaching. Anyone with the workstation user's authority can list, attach, send to, or
+  kill these sessions through zmx; the zmx boundary provides persistence, not privilege isolation.
 
 These controls protect the host broker from confused-deputy/path traversal attacks. They do not protect the user from code intentionally executed in the full terminal.
 
@@ -196,7 +199,12 @@ These controls protect the host broker from confused-deputy/path traversal attac
 - browser push subscription endpoints and encryption material;
 - event titles, bodies, deep links, and read state.
 
-Every in-progress shell receives the same notify-only hook token plus its default `IN_PROGRESS_PROJECT_ID`. A process possessing the token can submit a bounded event for any existing configured project by overriding that ID; it cannot use browser mutation or terminal APIs. Treat the token as a global notification capability and rotate it by removing its database metadata only while in-progress is stopped.
+Every in-progress shell receives the same notify-only hook token plus its default
+`IN_PROGRESS_PROJECT_ID` and `IN_PROGRESS_TERMINAL_SESSION_ID`. A recovered zmx shell retains the
+environment from its original creation. A process possessing the token can submit a bounded event
+for any existing configured project by overriding that ID; it cannot use browser mutation or
+terminal APIs. Treat the token as a global notification capability and rotate it by deleting every
+persistent Terminal, stopping in-progress, removing its database metadata, then restarting it.
 
 Web Push encrypts payload contents for the browser under [RFC 8291](https://datatracker.ietf.org/doc/html/rfc8291) and authenticates the application server with VAPID under [RFC 8292](https://datatracker.ietf.org/doc/html/rfc8292). Push providers still observe endpoint, timing, approximate size, source IP, and delivery metadata. in-progress sends title/body in the payload, so notification text must never contain secrets, source snippets, commands, credentials, or raw terminal output.
 

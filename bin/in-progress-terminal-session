@@ -1,0 +1,9 @@
+#!/bin/sh
+
+# zmx owns the durable PTY; this parent observes the configured shell's status.
+SHLVL=0
+export SHLVL
+"$@"
+status=$?
+printf '\033]777;in-progress-exit;%s;%d\007' "$IN_PROGRESS_TERMINAL_SESSION_ID" "$status"
+exit "$status"

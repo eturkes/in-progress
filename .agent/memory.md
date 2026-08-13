@@ -1,7 +1,9 @@
 # Project memory
 
 - Product name = in-progress.
-- Architecture = pinned Bun/TypeScript service + React/Vite PWA; Bun native PTYs persist independently of browser views.
+- Architecture = pinned Bun/TypeScript service + React/Vite PWA; each Terminal gets an explicitly
+  named zmx 0.7+ daemon/PTY, bridged by a Bun PTY. Names encode config/project/session ownership;
+  in-progress shutdown detaches and startup recovers live sessions from the shared zmx namespace.
 - Remote boundary = loopback service behind Tailscale Serve HTTPS; public/LAN binding is outside the safe default.
 - Plugin v1 = sandboxed frontend iframe + MessageChannel RPC. Installing a manifest path explicitly grants only its declared capabilities; entry bytes require a live host session, while explicit non-entry `assets` are public for opaque-origin CORS; host fixes project context per frame. Opaque origin protects host integrity, not confidentiality of granted data: iframe self-navigation can disclose it.
 - Runtime state = project-local ignored `.data/in-progress.db` plus integration-owned subtrees; no cloud account or external database.
