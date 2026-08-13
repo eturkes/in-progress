@@ -48,7 +48,8 @@ describe("loadConfig", () => {
     mkdirSync(align);
     mkdirSync(treeComplete);
     mkdirSync(join(preview, "bin"), { recursive: true });
-    mkdirSync(previewArtifacts);
+    const previewPlugin = join(previewArtifacts, "in-progress-plugin");
+    mkdirSync(previewPlugin, { recursive: true });
     writeTreeModule(
       treeComplete,
       "if (!targetRepo.endsWith('/workspace')) throw new Error('wrong project');",
@@ -87,7 +88,7 @@ describe("loadConfig", () => {
       displayPath: realpathSync(project),
       color: "#67d5b5",
     });
-    expect(config.pluginDirectories).toEqual([realpathSync(plugins)]);
+    expect(config.pluginDirectories).toEqual([realpathSync(plugins), realpathSync(previewPlugin)]);
     expect(config.integrations).toEqual({
       align: {
         sourceDirectory: realpathSync(align),
@@ -219,5 +220,31 @@ describe("loadConfig", () => {
     await expect(loadConfig(configPath)).rejects.toThrow(
       "Preview artifact directory must be separate from every project",
     );
+  });
+
+  test("deduplicates an explicitly installed Preview artifact plugin", async () => {
+    const directory = root();
+    mkdirSync(join(directory, "workspace"));
+    const preview = join(directory, "preview");
+    const previewArtifacts = join(directory, "preview-artifacts");
+    const previewPlugin = join(previewArtifacts, "in-progress-plugin");
+    mkdirSync(join(preview, "bin"), { recursive: true });
+    mkdirSync(previewPlugin, { recursive: true });
+    writeFileSync(join(preview, "bin/preview"), "#!/bin/sh\n");
+    chmodSync(join(preview, "bin/preview"), 0o755);
+    const configPath = join(directory, "in-progress.config.json");
+    writeJson(configPath, {
+      projects: [{ id: "demo", name: "Demo", path: "workspace" }],
+      pluginDirectories: ["preview-artifacts/in-progress-plugin"],
+      integrations: {
+        preview: {
+          sourceDirectory: "preview",
+          artifactDirectory: "preview-artifacts",
+          codexExecutable: "preview/bin/preview",
+        },
+      },
+    });
+
+    expect((await loadConfig(configPath)).pluginDirectories).toEqual([realpathSync(previewPlugin)]);
   });
 });

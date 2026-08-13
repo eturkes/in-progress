@@ -91,6 +91,23 @@ Browser + phone-ready personal agent control plane: durable project PTYs, projec
 - Codex app-server remains outside this bounded batch path: experimental persistent threads add global
   state/authority without improving commit detection, schema validation, or atomic publication.
 
+## Preview publication visibility repair
+
+- [x] Trace generated bundle → aggregate record → host status → served iframe bytes.
+- [x] Derive the installed Preview package from the integration artifact root; deduplicate exact config.
+- [x] Retry nonce-bound iframe initialization across remount races; retain one accepted MessagePort.
+- [x] Let stale production workers migrate through the canonical development proxy without intercepting
+      API or plugin documents.
+- [x] Run host gates, live initial/remount browser QA, cleanup, and scoped commit.
+
+### Visibility invariants
+
+- Preview status + iframe package share `artifactDirectory/in-progress-plugin`; configuration cannot
+  silently report a newer bundle than the one served.
+- Handshake retries remain bounded, reuse one nonce, and close every unaccepted port.
+- Development worker navigation handles only `/` + `/p/*`; `/api/*` + `/plugins/*` remain live network
+  boundaries.
+
 ## Frontier durable execution
 
 - [x] Boundary allocation → TypeScript/Bun UI, Kotlin/Restate policy, Rust effects, Quint model

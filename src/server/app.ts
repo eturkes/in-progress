@@ -36,6 +36,18 @@ function api(data: unknown, init: ResponseInit = {}): Response {
   return secureHeaders(Response.json(data, init));
 }
 
+export function developmentProxyTarget(webProxy: string, requested: URL): URL {
+  const target = new URL(webProxy);
+  if (requested.pathname === "/sw.js") {
+    target.pathname = "/dev-sw.js";
+    target.search = "?dev-sw";
+  } else {
+    target.pathname = requested.pathname;
+    target.search = requested.search;
+  }
+  return target;
+}
+
 function errorResponse(error: unknown): Response {
   if (error instanceof HttpError) return api({ error: error.message }, { status: error.status });
   if (error instanceof ZodError) {
@@ -327,9 +339,7 @@ export function createControlPlane(config: InProgressConfig, options: AppOptions
         throw new HttpError(405, "Method not allowed");
 
       if (webProxy) {
-        const target = new URL(webProxy);
-        target.pathname = pathname;
-        target.search = url.search;
+        const target = developmentProxyTarget(webProxy, url);
         const headers = new Headers(request.headers);
         for (const name of [
           "authorization",

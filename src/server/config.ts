@@ -232,6 +232,20 @@ export async function loadConfig(
     throw new Error("Preview artifact directory must be separate from every project");
   }
 
+  const pluginDirectories = parsed.pluginDirectories.map((path) =>
+    resolveDirectory(rootDir, path, "Plugin directory"),
+  );
+  if (previewArtifactDirectory) {
+    const previewPluginDirectory = resolveDirectory(
+      previewArtifactDirectory,
+      "in-progress-plugin",
+      "Preview plugin directory",
+    );
+    if (!pluginDirectories.includes(previewPluginDirectory)) {
+      pluginDirectories.push(previewPluginDirectory);
+    }
+  }
+
   if (parsed.integrations.treeComplete?.mode === "codex" && treeCompleteSourceDirectory) {
     let preflightProjectManifest: (targetRepo: string) => Promise<void>;
     try {
@@ -258,9 +272,7 @@ export async function loadConfig(
     dataDir: resolve(rootDir, ".data"),
     server: parsed.server,
     projects,
-    pluginDirectories: parsed.pluginDirectories.map((path) =>
-      resolveDirectory(rootDir, path, "Plugin directory"),
-    ),
+    pluginDirectories,
     integrations: {
       ...(parsed.integrations.align
         ? {

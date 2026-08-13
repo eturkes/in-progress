@@ -6,8 +6,9 @@ import {
   PreviewSettingsRequestSchema,
 } from "../src/shared/contracts";
 import { DEVELOPMENT_CSP_NONCE_PLACEHOLDER } from "../src/shared/development";
+import { developmentProxyTarget } from "../src/server/app";
 import { authorizePluginRequest } from "../src/web/plugin-authority";
-import viteConfig from "../vite.config";
+import viteConfig, { DEVELOPMENT_PWA_NAVIGATION_ALLOWLIST } from "../vite.config";
 
 describe("shared trust-boundary contracts", () => {
   test("development HTML and HMR use the loopback proxy contract", async () => {
@@ -28,6 +29,29 @@ describe("shared trust-boundary contracts", () => {
 
     expect(development.html?.cspNonce).toBe(DEVELOPMENT_CSP_NONCE_PLACEHOLDER);
     expect(development.server?.ws).toMatchObject({ clientPort: 5173 });
+    expect(
+      development.plugins
+        ?.flat()
+        .some((plugin) => plugin && "name" in plugin && plugin.name === "vite-plugin-pwa"),
+    ).toBe(true);
+    expect(DEVELOPMENT_PWA_NAVIGATION_ALLOWLIST.some((rule) => rule.test("/p/sss/preview"))).toBe(
+      true,
+    );
+    expect(
+      DEVELOPMENT_PWA_NAVIGATION_ALLOWLIST.some((rule) => rule.test("/plugins/preview/")),
+    ).toBe(false);
+    expect(DEVELOPMENT_PWA_NAVIGATION_ALLOWLIST.some((rule) => rule.test("/api/bootstrap"))).toBe(
+      false,
+    );
+    expect(
+      developmentProxyTarget("http://127.0.0.1:5173", new URL("http://127.0.0.1:4317/sw.js")).href,
+    ).toBe("http://127.0.0.1:5173/dev-sw.js?dev-sw");
+    expect(
+      developmentProxyTarget(
+        "http://127.0.0.1:5173",
+        new URL("http://127.0.0.1:4317/plugins/preview/?revision=2"),
+      ).href,
+    ).toBe("http://127.0.0.1:5173/plugins/preview/?revision=2");
     expect(production.html).toBeUndefined();
   });
 

@@ -39,6 +39,12 @@ Reference that directory from in-progress configuration:
 
 Each configured path may itself contain `in-progress.plugin.json`; otherwise in-progress scans its immediate child directories/symlinks as plugin roots. It does not recurse further. Paths are resolved relative to the config file, canonicalized, and must exist. Restart in-progress after changing manifests/assets.
 
+`integrations.preview.artifactDirectory` additionally installs its `in-progress-plugin` child. An
+identical explicit `pluginDirectories` entry is deduplicated; the integration-owned package prevents
+generation metadata and the served Preview iframe from resolving to different artifact trees.
+Development exposes a narrow PWA worker for `/` + `/p/*`, allowing an installed production worker to
+update without intercepting `/api/*` or `/plugins/*`.
+
 At startup the registry:
 
 1. validates every manifest strictly;

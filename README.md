@@ -152,7 +152,9 @@ published models, compiled dashboards, stages, locks, and aggregate plugin live 
 that root as a standalone local Git repository; Preview commits validated bundles, generation records,
 and aggregate output after each successful package, configures no remote, and never pushes. Host status
 reads inventory and generation metadata from one atomically published private index, not a possibly
-newer loose record. Stages,
+newer loose record. Configuring the Preview integration also installs
+`artifactDirectory/in-progress-plugin`; the generation and served iframe therefore share one package.
+Stages,
 locks, and recovery backups remain ignored. Projects without a matching package display an explicit
 unavailable state.
 

@@ -3,12 +3,18 @@ import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 import { DEVELOPMENT_CSP_NONCE_PLACEHOLDER } from "./src/shared/development.ts";
 
+export const DEVELOPMENT_PWA_NAVIGATION_ALLOWLIST = [/^\/(?:$|p\/)/];
+
 export default defineConfig(({ command }) => ({
   plugins: [
     react(),
     VitePWA({
       registerType: "autoUpdate",
       injectRegister: "script-defer",
+      devOptions: {
+        enabled: true,
+        navigateFallbackAllowlist: DEVELOPMENT_PWA_NAVIGATION_ALLOWLIST,
+      },
       includeAssets: ["in-progress.svg", "apple-touch-icon.png"],
       manifest: {
         name: "in-progress",

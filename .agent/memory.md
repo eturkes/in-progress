@@ -31,4 +31,7 @@
   the prior validated model explicitly, while fresh omits it. Models/bundles/records/aggregate live at
   configured external artifact root (`~/.local/share/in-progress/preview` in ecosystem config), required
   disjoint from every project and committed to a standalone local Git repository with no remote/push.
-  Preview iframe remains capability-free; private aggregate index + generation record own status.
+  Preview integration automatically installs the artifact root's `in-progress-plugin` child, so
+  generation status + served iframe share one package. Preview iframe remains capability-free; private
+  aggregate index + generation record own status. Plugin init retries one nonce across bounded ports;
+  dev `/sw.js` proxies the PWA dev worker so installed production clients cannot pin stale host code.

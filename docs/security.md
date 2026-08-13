@@ -130,10 +130,10 @@ Plugin URLs share the host URL origin for simple static serving, but two indepen
 
 The child receives a unique opaque origin. Host cookies/storage/DOM, service workers, forms, nested frames, workers, popups, top navigation, and external network endpoints are unavailable. Plugin document CSP permits installed inline code and limits script/style/image/font/connect requests to that plugin's canonical static URL prefix; the explicit URL is necessary because `'self'` does not match the effective opaque origin. Inline permission adds no host authority—the entire configured plugin is already trusted with its manifest grants—and enables self-contained bundles that survive privacy/wallet extensions blocking opaque-frame subresources. A live identity-bound browser session is required before the entry document's bytes are served; manifests and canonical-file checks forbid declaring the entry or a symlink alias as a public asset. Only manifest-declared non-document assets receive wildcard CORS/CORP so ES modules load from the serialized opaque origin (`Origin: null`); declared navigable HTML/SVG/XML/PDF assets retain document sandbox CSP. Privileged API responses and undeclared plugin files receive no CORS or static-file access. The [HTML Standard](https://html.spec.whatwg.org/multipage/iframe-embed-object.html#attr-iframe-sandbox) defines the sandbox flags.
 
-The only authority is a new `MessagePort` created for one plugin + selected project. The host:
+The only authority is one accepted `MessagePort` for one plugin + selected project. The host:
 
-- transfers it only to the exact iframe window on its first entry load;
-- requires the random init nonce back on that port;
+- transfers bounded handshake attempts only to the exact iframe window for one entry load;
+- reuses one random init nonce, accepts the first matching reply, and closes every other attempt;
 - validates every message shape and timeout;
 - checks the manifest capability on every method;
 - validates Tree Complete's three fork IDs before showing a mode/ID-specific trusted-host
