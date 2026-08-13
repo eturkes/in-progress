@@ -32,6 +32,7 @@
     "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.web.json --noEmit && tsc -p packages/plugin-sdk/tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@dnd-kit/react": "0.5.0",
     "@fontsource-variable/atkinson-hyperlegible-next": "5.3.0",
     "@fontsource/iosevka": "5.3.0",
     "@xterm/addon-fit": "0.11.0",

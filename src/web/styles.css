@@ -309,6 +309,12 @@ button:disabled {
   overflow-y: auto;
 }
 
+.project-item-shell {
+  position: relative;
+  width: 100%;
+  border-radius: 8px;
+}
+
 .project-item {
   position: relative;
   display: grid;
@@ -325,6 +331,69 @@ button:disabled {
   transition:
     color 120ms ease,
     background 120ms ease;
+}
+
+.project-item-shell .project-item {
+  padding-right: 36px;
+}
+
+.reorder-handle {
+  display: grid;
+  padding: 0;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: light-dark(#64736e, #748196);
+  background: transparent;
+  cursor: grab;
+  opacity: 0.28;
+  touch-action: none;
+  transition:
+    color 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease,
+    opacity 120ms ease;
+}
+
+.reorder-handle:hover,
+.reorder-handle:focus-visible,
+.reorder-handle[aria-pressed="true"] {
+  border-color: var(--border);
+  color: var(--text);
+  background: var(--surface-raised);
+  opacity: 1;
+}
+
+.reorder-handle[aria-pressed="true"] {
+  cursor: grabbing;
+}
+
+.reorder-handle:disabled {
+  opacity: 0.12;
+}
+
+.project-reorder-handle {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  right: 5px;
+  width: 26px;
+  height: 34px;
+  transform: translateY(-50%);
+}
+
+.project-item-shell:hover .project-reorder-handle,
+.project-item-shell:focus-within .project-reorder-handle {
+  opacity: 1;
+}
+
+.project-item-shell.is-dragging {
+  z-index: 30;
+}
+
+.project-item-shell.is-dragging .project-item {
+  background: var(--surface-raised);
+  box-shadow: 0 9px 24px light-dark(#263c3430, #0009);
 }
 
 .project-item::before {
@@ -435,7 +504,7 @@ button:disabled {
 
 .shortcut-hint {
   position: absolute;
-  right: 9px;
+  right: 38px;
   bottom: 5px;
   color: light-dark(#77857f, #596577);
   font-family: "Iosevka", monospace;
@@ -553,12 +622,22 @@ button:disabled {
   padding: 16px 7px;
 }
 
+.rail-is-collapsed .project-item-shell {
+  width: 50px;
+}
+
 .rail-is-collapsed .project-item {
   display: flex;
   width: 50px;
   min-height: 48px;
   justify-content: center;
   padding: 6px;
+}
+
+.rail-is-collapsed .project-reorder-handle {
+  right: -1px;
+  width: 20px;
+  height: 30px;
 }
 
 .rail-is-collapsed .project-item::before {
@@ -614,6 +693,13 @@ button:disabled {
   display: none;
 }
 
+.plugin-tab-shell {
+  position: relative;
+  display: flex;
+  min-width: max-content;
+  align-items: stretch;
+}
+
 .plugin-tab {
   position: relative;
   display: inline-flex;
@@ -630,6 +716,32 @@ button:disabled {
     color 120ms ease,
     background 120ms ease,
     border-color 120ms ease;
+}
+
+.plugin-tab-shell .plugin-tab {
+  padding-left: 34px;
+}
+
+.plugin-reorder-handle {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 5px;
+  width: 24px;
+  height: 32px;
+  transform: translateY(-50%);
+}
+
+.plugin-tab-shell:hover .plugin-reorder-handle,
+.plugin-tab-shell:focus-within .plugin-reorder-handle {
+  opacity: 1;
+}
+
+.plugin-tab-shell.is-dragging {
+  z-index: 30;
+  border-radius: 6px;
+  background: var(--surface-raised);
+  box-shadow: 0 9px 24px light-dark(#263c3430, #0009);
 }
 
 .plugin-tab:hover {
@@ -1960,12 +2072,22 @@ kbd {
     padding: 16px 7px;
   }
 
+  .project-item-shell {
+    width: 50px;
+  }
+
   .project-item {
     display: flex;
     width: 50px;
     min-height: 48px;
     justify-content: center;
     padding: 6px;
+  }
+
+  .project-reorder-handle {
+    right: -1px;
+    width: 20px;
+    height: 30px;
   }
 
   .rail-footer {
@@ -2041,6 +2163,10 @@ kbd {
   .project-list {
     align-items: stretch;
     padding: 0 9px 16px;
+  }
+
+  .project-item-shell {
+    width: 100%;
   }
 
   .project-item {
@@ -2329,6 +2455,20 @@ kbd {
   .notification-button {
     min-width: 44px;
     min-height: 44px;
+  }
+
+  .reorder-handle {
+    opacity: 0.7;
+  }
+
+  .project-reorder-handle {
+    width: 34px;
+    height: 42px;
+  }
+
+  .plugin-reorder-handle {
+    width: 30px;
+    height: 40px;
   }
 
   .event-card {

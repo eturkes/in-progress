@@ -12,6 +12,7 @@ import {
   Files,
   GitBranch,
   Globe,
+  GripVertical,
   Menu,
   Monitor,
   Moon,
@@ -47,6 +48,8 @@ import { moveRovingTab, trapTab } from "./a11y";
 import { ApiClient, bootstrap } from "./api";
 import { NotificationCenter, useEventFeed } from "./components/Notifications";
 import { PluginFrame, type PluginStatus } from "./components/PluginFrame";
+import { SortableList } from "./components/SortableList";
+import { applyStoredOrder, moveItem, parseStoredOrder } from "./order";
 import { confirmPreviewGeneration } from "./preview-authority";
 import { useTheme } from "./ThemeProvider";
 import type { ThemePreference } from "./theme";
@@ -80,6 +83,9 @@ const pluginIcons: Record<PluginDto["icon"], Icon> = {
   sparkles: Sparkles,
 };
 
+const PROJECT_ORDER_STORAGE_KEY = "in-progress:project-order";
+const PLUGIN_ORDER_STORAGE_KEY = "in-progress:plugin-order";
+
 function readRoute(pathname = window.location.pathname): RouteState {
   const match = /^\/p\/([^/]+)\/([^/]+)\/?$/.exec(pathname);
   if (!match) return { projectId: null, pluginId: null };
@@ -108,6 +114,21 @@ function storeValue(key: string, value: string): void {
   } catch {
     // Navigation still works when persistent browser storage is unavailable.
   }
+}
+
+function loadOrder<T extends { id: string }>(items: readonly T[], key: string): T[] {
+  return applyStoredOrder(items, parseStoredOrder(storedValue(key)));
+}
+
+function reorderAndStore<T extends { id: string }>(
+  items: T[],
+  from: number,
+  to: number,
+  key: string,
+): T[] {
+  const reordered = moveItem(items, from, to);
+  if (reordered !== items) storeValue(key, JSON.stringify(reordered.map((item) => item.id)));
+  return reordered;
 }
 
 function loadCollapsed(): boolean {
@@ -174,6 +195,12 @@ export function App() {
 function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
   const api = useMemo(() => new ApiClient(bootstrapData.csrfToken), [bootstrapData.csrfToken]);
   const { resolvedTheme } = useTheme();
+  const [projects, setProjects] = useState(() =>
+    loadOrder(bootstrapData.projects, PROJECT_ORDER_STORAGE_KEY),
+  );
+  const [plugins, setPlugins] = useState(() =>
+    loadOrder(bootstrapData.plugins, PLUGIN_ORDER_STORAGE_KEY),
+  );
   const [route, setRoute] = useState<RouteState>(readRoute);
   const [railCollapsed, setRailCollapsed] = useState(loadCollapsed);
   const [projectDrawer, setProjectDrawer] = useState(false);
@@ -215,20 +242,18 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
   const hostConnected = online && feed.connected;
 
   const project =
-    bootstrapData.projects.find((candidate) => candidate.id === route.projectId) ??
-    bootstrapData.projects.find(
-      (candidate) => candidate.id === storedValue("in-progress:last-project"),
-    ) ??
-    bootstrapData.projects[0] ??
+    projects.find((candidate) => candidate.id === route.projectId) ??
+    projects.find((candidate) => candidate.id === storedValue("in-progress:last-project")) ??
+    projects[0] ??
     null;
   const plugin =
-    bootstrapData.plugins.find((candidate) => candidate.id === route.pluginId) ??
-    bootstrapData.plugins.find(
+    plugins.find((candidate) => candidate.id === route.pluginId) ??
+    plugins.find(
       (candidate) =>
         project && candidate.id === storedValue(`in-progress:last-plugin:${project.id}`),
     ) ??
-    bootstrapData.plugins.find((candidate) => candidate.id === "terminal") ??
-    bootstrapData.plugins[0] ??
+    plugins.find((candidate) => candidate.id === "terminal") ??
+    plugins[0] ??
     null;
 
   const navigate = useCallback((projectId: string, pluginId: string, replace = false) => {
@@ -279,13 +304,13 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
   const selectProject = useCallback(
     (nextProject: ProjectDto) => {
       const remembered = storedValue(`in-progress:last-plugin:${nextProject.id}`);
-      const nextPlugin = bootstrapData.plugins.some((candidate) => candidate.id === remembered)
+      const nextPlugin = plugins.some((candidate) => candidate.id === remembered)
         ? remembered!
         : "terminal";
       navigate(nextProject.id, nextPlugin);
       setProjectDrawer(false);
     },
-    [bootstrapData.plugins, navigate],
+    [navigate, plugins],
   );
 
   const selectPlugin = useCallback(
@@ -321,7 +346,7 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
       }
       const number = Number(event.key);
       if (event.altKey && !modifier && number >= 1 && number <= 9) {
-        const next = bootstrapData.projects[number - 1];
+        const next = projects[number - 1];
         if (next) {
           event.preventDefault();
           selectProject(next);
@@ -329,7 +354,7 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
         return;
       }
       if (modifier && event.altKey && number >= 1 && number <= 9) {
-        const next = bootstrapData.plugins[number - 1];
+        const next = plugins[number - 1];
         if (next) {
           event.preventDefault();
           selectPlugin(next);
@@ -337,13 +362,12 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
         return;
       }
       if (modifier && event.shiftKey && (event.key === "[" || event.key === "]")) {
-        const current = bootstrapData.plugins.findIndex((candidate) => candidate.id === plugin?.id);
+        const current = plugins.findIndex((candidate) => candidate.id === plugin?.id);
         if (current >= 0) {
           event.preventDefault();
           const direction = event.key === "]" ? 1 : -1;
-          const index =
-            (current + direction + bootstrapData.plugins.length) % bootstrapData.plugins.length;
-          const next = bootstrapData.plugins[index];
+          const index = (current + direction + plugins.length) % plugins.length;
+          const next = plugins[index];
           if (next) selectPlugin(next);
         }
       }
@@ -351,12 +375,12 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [
-    bootstrapData.plugins,
-    bootstrapData.projects,
     notificationOpen,
     paletteOpen,
     plugin?.id,
+    plugins,
     projectDrawer,
+    projects,
     selectPlugin,
     selectProject,
   ]);
@@ -368,10 +392,20 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
     });
   };
 
-  const filteredProjects = bootstrapData.projects.filter((candidate) =>
+  const filteredProjects = projects.filter((candidate) =>
     `${candidate.name} ${candidate.displayPath}`
       .toLowerCase()
       .includes(projectFilter.toLowerCase()),
+  );
+  const reorderProjects = useCallback(
+    (from: number, to: number) =>
+      setProjects((current) => reorderAndStore(current, from, to, PROJECT_ORDER_STORAGE_KEY)),
+    [],
+  );
+  const reorderPlugins = useCallback(
+    (from: number, to: number) =>
+      setPlugins((current) => reorderAndStore(current, from, to, PLUGIN_ORDER_STORAGE_KEY)),
+    [],
   );
   const projectUnread = (projectId: string) =>
     feed.events.filter((event) => event.projectId === projectId && !event.readAt).length;
@@ -520,7 +554,7 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
         </div>
         <div className="rail-section-label">
           <span>PROJECTS</span>
-          <span>{bootstrapData.projects.length}</span>
+          <span>{projects.length}</span>
         </div>
         <label className="project-search">
           <Search size={15} aria-hidden="true" />
@@ -543,40 +577,70 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
           ) : null}
         </label>
         <nav className="project-list">
-          {filteredProjects.map((candidate, index) => {
-            const unread = projectUnread(candidate.id);
-            return (
-              <button
-                type="button"
-                className={`project-item ${candidate.id === project.id ? "is-active" : ""}`}
-                key={candidate.id}
-                aria-current={candidate.id === project.id ? "page" : undefined}
-                aria-label={`${candidate.name}, ${candidate.available ? "available" : "offline"}`}
-                onClick={() => selectProject(candidate)}
-                title={railCollapsed ? `${candidate.name} · ${candidate.displayPath}` : undefined}
-                style={{ "--project-color": candidate.color } as CSSProperties}
-              >
-                <span className="project-glyph" aria-hidden="true">
-                  {candidate.name.slice(0, 2).toUpperCase()}
-                  <span
-                    className={`availability ${candidate.available ? "is-online" : "is-offline"}`}
-                  />
-                </span>
-                <span className="sr-only">{candidate.available ? "Available" : "Offline"}</span>
-                <span className="project-copy">
-                  <strong>{candidate.name}</strong>
-                  <span>
-                    {candidate.branch ? <GitBranch size={12} /> : null}
-                    {candidate.branch ?? candidate.displayPath}
-                  </span>
-                </span>
-                {unread > 0 ? (
-                  <span className="project-badge">{unread > 99 ? "99+" : unread}</span>
-                ) : null}
-                {index < 9 ? <span className="shortcut-hint">⌥{index + 1}</span> : null}
-              </button>
-            );
-          })}
+          <SortableList
+            items={filteredProjects}
+            type="project"
+            disabled={Boolean(projectFilter)}
+            onReorder={reorderProjects}
+          >
+            {(candidate, _index, { itemRef, handleRef, isDragging }) => {
+              const unread = projectUnread(candidate.id);
+              const orderIndex = projects.findIndex((item) => item.id === candidate.id);
+              return (
+                <div
+                  ref={itemRef}
+                  className={`project-item-shell ${isDragging ? "is-dragging" : ""}`}
+                >
+                  <button
+                    type="button"
+                    className={`project-item ${candidate.id === project.id ? "is-active" : ""}`}
+                    aria-current={candidate.id === project.id ? "page" : undefined}
+                    aria-label={`${candidate.name}, ${candidate.available ? "available" : "offline"}`}
+                    onClick={() => selectProject(candidate)}
+                    title={
+                      railCollapsed ? `${candidate.name} · ${candidate.displayPath}` : undefined
+                    }
+                    style={{ "--project-color": candidate.color } as CSSProperties}
+                  >
+                    <span className="project-glyph" aria-hidden="true">
+                      {candidate.name.slice(0, 2).toUpperCase()}
+                      <span
+                        className={`availability ${candidate.available ? "is-online" : "is-offline"}`}
+                      />
+                    </span>
+                    <span className="sr-only">{candidate.available ? "Available" : "Offline"}</span>
+                    <span className="project-copy">
+                      <strong>{candidate.name}</strong>
+                      <span>
+                        {candidate.branch ? <GitBranch size={12} /> : null}
+                        {candidate.branch ?? candidate.displayPath}
+                      </span>
+                    </span>
+                    {unread > 0 ? (
+                      <span className="project-badge">{unread > 99 ? "99+" : unread}</span>
+                    ) : null}
+                    {orderIndex < 9 ? (
+                      <span className="shortcut-hint">⌥{orderIndex + 1}</span>
+                    ) : null}
+                  </button>
+                  <button
+                    ref={handleRef}
+                    type="button"
+                    className="reorder-handle project-reorder-handle"
+                    aria-label={`Reorder ${candidate.name} project`}
+                    disabled={Boolean(projectFilter)}
+                    title={
+                      projectFilter
+                        ? "Clear the project filter to reorder"
+                        : `Drag to reorder ${candidate.name}`
+                    }
+                  >
+                    <GripVertical size={14} aria-hidden="true" />
+                  </button>
+                </div>
+              );
+            }}
+          </SortableList>
           {filteredProjects.length === 0 ? (
             <p className="no-projects">No project matches “{projectFilter}”.</p>
           ) : null}
@@ -631,38 +695,54 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
             aria-label="Project views"
             onKeyDown={moveRovingTab}
           >
-            {bootstrapData.plugins.map((candidate, index) => {
-              const PluginIcon = pluginIcons[candidate.icon];
-              const status = pluginStatuses[`${project.id}:${candidate.id}`];
-              return (
-                <button
-                  type="button"
-                  id={`plugin-tab-${candidate.id}`}
-                  role="tab"
-                  aria-selected={candidate.id === plugin.id}
-                  aria-controls="plugin-viewport"
-                  tabIndex={candidate.id === plugin.id ? 0 : -1}
-                  className={`plugin-tab ${candidate.id === plugin.id ? "is-active" : ""} ${status ? `has-${status.state}` : ""}`}
-                  key={candidate.id}
-                  onClick={() => selectPlugin(candidate)}
-                  title={
-                    index < 9
-                      ? `${candidate.description} · shortcut ${shortcutModifier}+Alt+${index + 1}`
-                      : candidate.description
-                  }
-                >
-                  <PluginIcon size={17} />
-                  <span>{status?.title ?? candidate.name}</span>
-                  {status?.state === "busy" ? (
-                    <span className="mini-spinner" aria-label="Busy" />
-                  ) : null}
-                  {status?.badge ? <span className="plugin-badge">{status.badge}</span> : null}
-                  {status?.state === "attention" || status?.state === "error" ? (
-                    <span className="plugin-status-dot" aria-label={status.state} />
-                  ) : null}
-                </button>
-              );
-            })}
+            <SortableList items={plugins} type="plugin" onReorder={reorderPlugins}>
+              {(candidate, index, { itemRef, handleRef, isDragging }) => {
+                const PluginIcon = pluginIcons[candidate.icon];
+                const status = pluginStatuses[`${project.id}:${candidate.id}`];
+                return (
+                  <div
+                    ref={itemRef}
+                    className={`plugin-tab-shell ${isDragging ? "is-dragging" : ""}`}
+                    role="presentation"
+                  >
+                    <button
+                      type="button"
+                      id={`plugin-tab-${candidate.id}`}
+                      role="tab"
+                      aria-selected={candidate.id === plugin.id}
+                      aria-controls="plugin-viewport"
+                      tabIndex={candidate.id === plugin.id ? 0 : -1}
+                      className={`plugin-tab ${candidate.id === plugin.id ? "is-active" : ""} ${status ? `has-${status.state}` : ""}`}
+                      onClick={() => selectPlugin(candidate)}
+                      title={
+                        index < 9
+                          ? `${candidate.description} · shortcut ${shortcutModifier}+Alt+${index + 1}`
+                          : candidate.description
+                      }
+                    >
+                      <PluginIcon size={17} />
+                      <span>{status?.title ?? candidate.name}</span>
+                      {status?.state === "busy" ? (
+                        <span className="mini-spinner" aria-label="Busy" />
+                      ) : null}
+                      {status?.badge ? <span className="plugin-badge">{status.badge}</span> : null}
+                      {status?.state === "attention" || status?.state === "error" ? (
+                        <span className="plugin-status-dot" aria-label={status.state} />
+                      ) : null}
+                    </button>
+                    <button
+                      ref={handleRef}
+                      type="button"
+                      className="reorder-handle plugin-reorder-handle"
+                      aria-label={`Reorder ${candidate.name} view`}
+                      title={`Drag to reorder ${candidate.name}`}
+                    >
+                      <GripVertical size={13} aria-hidden="true" />
+                    </button>
+                  </div>
+                );
+              }}
+            </SortableList>
           </div>
           <div className="host-actions">
             {plugin.id === "preview" ? (
@@ -792,7 +872,7 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
         events={feed.events}
         loading={feed.loading}
         open={notificationOpen}
-        projects={bootstrapData.projects}
+        projects={projects}
         onClose={() => setNotificationOpen(false)}
         onMarkRead={feed.markRead}
         onMarkAllRead={feed.markAllRead}
@@ -802,8 +882,8 @@ function ControlPlane({ bootstrapData }: { bootstrapData: BootstrapDto }) {
 
       <CommandPalette
         open={paletteOpen}
-        projects={bootstrapData.projects}
-        plugins={bootstrapData.plugins}
+        projects={projects}
+        plugins={plugins}
         activeProject={project}
         onClose={() => setPaletteOpen(false)}
         onProject={selectProject}
