@@ -4,6 +4,8 @@ import { z } from "zod";
 import {
   NotificationEventInputSchema,
   PluginManifestSchema,
+  parsePluginParams,
+  parsePluginResult,
   type PluginCapability,
   type PluginDto,
   type PluginManifest,
@@ -141,21 +143,28 @@ export class PluginRegistry {
     integrations: IntegrationRegistry,
   ): Promise<unknown> {
     this.assertCapability(pluginId, request.method);
+    const params = parsePluginParams(request.method, request.params);
+    let result: unknown;
     switch (request.method) {
       case "project.metadata":
-        return await projects.dto(projects.get(projectId));
+        result = await projects.dto(projects.get(projectId));
+        break;
       case "project.tree":
-        return projects.tree(projectId, request.params);
+        result = await projects.tree(projectId, params);
+        break;
       case "project.readText":
-        return projects.readText(projectId, request.params);
+        result = await projects.readText(projectId, params);
+        break;
       case "project.git":
-        return await projects.git(projectId);
+        result = await projects.git(projectId);
+        break;
       case "host.notify": {
         const input = NotificationEventInputSchema.parse({
-          ...z.record(z.string(), z.unknown()).parse(request.params ?? {}),
+          ...z.record(z.string(), z.unknown()).parse(params ?? {}),
           projectId,
         });
-        return notifications.create(input);
+        result = notifications.create(input);
+        break;
       }
       case "align.status":
       case "drift.render":
@@ -165,7 +174,12 @@ export class PluginRegistry {
       case "drift.analyze":
       case "tree-complete.workspace":
       case "tree-complete.createFork":
-        return integrations.dispatch(projectId, request.method, request.params);
+      case "slide-gen.status":
+      case "slide-gen.generate":
+      case "slide-gen.render":
+        result = await integrations.dispatch(projectId, request.method, params);
+        break;
     }
+    return parsePluginResult(request.method, result);
   }
 }

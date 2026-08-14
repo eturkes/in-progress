@@ -216,6 +216,11 @@ describe("shared trust-boundary contracts", () => {
     const source = await Bun.file(new URL("../scripts/build-ecosystem.ts", import.meta.url)).text();
     expect(source).toContain('resolve(checkouts.preview, "bin/preview")');
     expect(source).not.toContain('"uv", "run"');
+    expect(source).not.toContain('argv: ["npm"');
+    expect(source).not.toContain("pnpm@10.34.5");
+    expect(source).toContain('["pnpm", "install", "--frozen-lockfile"]');
+    expect(source).not.toContain("--ignore-workspace");
+    expect(source).toContain('label: "Slide Gen MoonBit resolution"');
     expect(source).toMatch(/"--artifact-root",\s+previewArtifacts/);
     expect(source).toContain('"--git-track"');
     expect(source).toContain('...projectSources.flatMap(([id, path]) => ["--source", id, path])');
@@ -364,7 +369,101 @@ describe("shared trust-boundary contracts", () => {
         path: "./plugins/turbo-prompt",
         color: "#315ed4",
       },
+      {
+        id: "slide-gen",
+        name: "Slide Gen",
+        path: "./plugins/slide-gen",
+        color: "#d06545",
+      },
     ]);
+  });
+
+  test("reference plugin uses only the canonical generated protocol client", async () => {
+    const source = await Bun.file(
+      new URL("../examples/plugins/project-map/index.html", import.meta.url),
+    ).text();
+
+    expect(source).toContain("/* in-progress-protocol:start */");
+    expect(source).toContain("/* in-progress-protocol:end */");
+    expect(source).toContain("InProgressProtocol");
+    expect(source).toContain("connectInProgress");
+    expect(source).toContain(
+      'const requiredCapabilities = ["project.metadata", "project.tree", "project.git"]',
+    );
+    expect(source).not.toContain("const pending = new Map");
+    expect(source).not.toContain("function receiveHost");
+  });
+
+  test("Slide Gen operations require trusted host confirmation", () => {
+    const prompts: string[] = [];
+    const confirm = (message: string) => {
+      prompts.push(message);
+      return false;
+    };
+
+    expect(
+      authorizePluginRequest(
+        "slide-gen.status",
+        undefined,
+        "Slide Gen",
+        "slide-gen",
+        "Fixture",
+        "fixture",
+        null,
+        confirm,
+      ),
+    ).toEqual({ allowed: true, params: undefined });
+    expect(prompts).toHaveLength(0);
+
+    expect(
+      authorizePluginRequest(
+        "slide-gen.generate",
+        {},
+        "Slide Gen",
+        "slide-gen",
+        "Fixture",
+        "fixture",
+        null,
+        confirm,
+      ),
+    ).toEqual({ allowed: false, error: "Invalid slide-gen request" });
+    expect(prompts).toHaveLength(0);
+
+    expect(
+      authorizePluginRequest(
+        "slide-gen.generate",
+        undefined,
+        "Slide Gen",
+        "slide-gen",
+        "Fixture",
+        "fixture",
+        null,
+        confirm,
+      ),
+    ).toEqual({ allowed: false, error: "slide-gen generate canceled by the user" });
+    expect(prompts[0]).toMatch(/slide-gen generate.*Plugin: Slide Gen.*Project: Fixture/s);
+    expect(prompts[0]).toMatch(/Plugin ID: slide-gen.*Project ID: fixture.*Operation: generate/s);
+    expect(prompts[0]).toMatch(
+      /Codex without a sandbox.*project content to OpenAI.*replaces the published deck after validation/s,
+    );
+
+    prompts.length = 0;
+    expect(
+      authorizePluginRequest(
+        "slide-gen.render",
+        undefined,
+        "Slide Gen",
+        "slide-gen",
+        "Fixture",
+        "fixture",
+        null,
+        confirm,
+      ),
+    ).toEqual({ allowed: false, error: "slide-gen render canceled by the user" });
+    expect(prompts[0]).toMatch(/slide-gen render.*Operation: render/s);
+    expect(prompts[0]).toMatch(
+      /ChromiumFish.*replaces the project's derived page images and PDF after validation/s,
+    );
   });
 
   test("Tree Complete mutations require a trusted host confirmation", () => {

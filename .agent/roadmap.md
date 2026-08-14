@@ -7,7 +7,7 @@ Browser + phone-ready personal agent control plane: durable project PTYs, projec
 ## Build sequence
 
 - [x] Architecture + threat model frozen
-- [x] Shared contracts + config + plugin SDK
+- [x] Shared contracts + config + canonical plugin protocol
 - [x] Bun server: auth, projects, plugin RPC, PTY, persistence, push
 - [x] Responsive React PWA + xterm terminal + plugin host + inbox
 - [x] Reference plugin + author/deployment/security docs
@@ -147,14 +147,14 @@ Browser + phone-ready personal agent control plane: durable project PTYs, projec
 
 ## Frontier durable execution
 
-- [x] Boundary allocation → TypeScript/Bun UI, Kotlin/Restate policy, Rust effects, Quint model
+- [x] Boundary allocation → TypeScript/Bun UI + Restate policy, Rust effects, Quint model
 - [x] Model commit ambiguity + retry exhaustion/pause/resume; gate with named traces/simulation/TLC
 - [x] Build UUID/request-bound Rust receipt ledger + strict loopback protocol
-- [x] Build Kotlin workflow + cross-language receipt validation
+- [x] Build Bun/TypeScript workflow + cross-language receipt validation
 - [x] Kill workflow endpoint after executor commit → restart/replay/attach full-chain proof
-- [x] Pin formal binaries, Gradle distribution/dependencies/artifacts, Cargo graph, Restate config
-- [ ] Migrate `align.status` as the first real fixed bounded operation; preserve plugin API
-- [ ] Define `slide-gen` deck/render operation identity + publication receipt before integration
+- [x] Pin formal binaries, pnpm dependencies, Cargo graph, and Restate config
+- [x] Keep the probe isolated → no parallel production adapter
+- [x] Define slide-gen deck/render operation identity + publication receipt before integration
 
 ### Frontier invariants
 
@@ -164,3 +164,38 @@ Browser + phone-ready personal agent control plane: durable project PTYs, projec
 - Raw Restate invocation ingress = private Unix socket; browser traffic must cross Bun auth/origin/CSRF.
 - Restate completion retention = 30 days; executor receipt retention = indefinite.
 - Existing Bun production behavior remains unchanged until a real adapter passes equivalent gates.
+
+## Stack convergence + slide-gen integration
+
+- [x] Replace duplicated plugin RPC/types/inliners with one schema-owned `@in-progress/protocol`
+      package; sync one generated vendored artifact into every plugin repository and prove byte identity.
+- [x] Converge browser projects on Node 24, pnpm 11, TypeScript 7, Vite 8, Oxlint, and Oxfmt;
+      replace Turbo Prompt's npm/ESLint path with Vite+ as its sole task surface.
+- [x] Replace Align's Pyright gate with ty; move Drift to the current Rust toolchain and add targeted
+      parser properties/fuzzing plus dependency-policy validation.
+- [x] Rewrite Preview as a Bun/TypeScript application with equivalent CLI, publication, server,
+      aggregate-plugin, and safety behavior; remove the Python implementation.
+- [x] Extract Tree Complete's typed application service; make Fastify a standalone adapter only and
+      call the core directly from the in-progress embedded adapter.
+- [x] Replace the frontier Kotlin/JVM endpoint with the Restate TypeScript SDK on Bun; delete the JDK,
+      Gradle, Vert.x, and Log4j surface; add model-derived implementation traces without a second runtime.
+- [x] Preserve slide-gen's MoonBit core; add a self-contained TypeScript plugin and fixed host adapters
+      for project-bound status, generation, and rendering; pin the repository as the sixth submodule.
+- [x] Add root Playwright/Chromiumfish coverage for production PWA, iframe handshake, reconnect, and
+      narrow-screen behavior; retain xterm.js as the single terminal renderer.
+- [x] Run every native, ecosystem, frontier, browser, and committed-state gate; update durable docs,
+      clean touched paths, and close every repository with a scoped commit.
+
+### Convergence invariants
+
+- One protocol schema owns every RPC request, response, context, event, client, and static bundling
+  contract. Vendored copies are generated outputs and must match the root package byte-for-byte.
+- One implementation exists per responsibility. Migrations remove Pyright, Preview Python, embedded
+  Fastify dispatch, frontier Kotlin, npm/ESLint, and duplicated plugin clients in the same wave.
+- Language boundaries follow authority: Bun/TypeScript owns browser/control/workflow policy; Rust owns
+  hostile trace parsing and privileged effects; Python owns Align semantics; MoonBit owns deterministic
+  slide discovery, validation, publication, and rendering orchestration.
+- slide-gen browser input selects only the host-bound project and one fixed operation. The host resolves
+  the checkout, executable, deck/render roots, command, model configuration, and concurrency policy.
+- Token-spending slide generation and project-mutating operations retain immediate trusted-host
+  confirmation. Render remains local and deterministic but uses the same per-project operation lease.

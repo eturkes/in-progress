@@ -8,7 +8,9 @@ import {
   DriftCodexSessionIdSchema,
   DriftImportSessionRequestSchema,
   DriftValidateTracesRequestSchema,
+  TreeForkResponseSchema,
   TreeForkRequestSchema,
+  TreeWorkspaceSchema,
   type AlignSetupRequest,
   type AlignStatus,
   type DriftRender,
@@ -22,6 +24,7 @@ import type { InProgressConfig } from "./config";
 import { runBounded } from "./process";
 import { ProjectRegistry } from "./projects";
 import { HttpError } from "./security";
+import { SlideGenService } from "./slide-gen";
 import { discoverDriftCodexSessions } from "./drift-sessions";
 import {
   loadTreeCompleteModule,
@@ -65,129 +68,6 @@ const AlignStatusDocumentSchema = z
       .nullable(),
   })
   .passthrough();
-
-const TreeIdSchema = z.string().min(1).max(200);
-const TreeTextSchema = z.string().max(100_000);
-const TreeAlternativeSchema = z
-  .object({
-    id: TreeIdSchema,
-    label: z.string().max(2_000),
-    description: TreeTextSchema,
-    impact: TreeTextSchema,
-    agentBrief: TreeTextSchema,
-    signal: z.enum(["recommended", "balanced", "experimental"]),
-  })
-  .strict();
-const TreeDecisionSchema = z
-  .object({
-    id: TreeIdSchema,
-    title: z.string().max(2_000),
-    question: TreeTextSchema,
-    rationale: TreeTextSchema,
-    chosenAlternativeId: TreeIdSchema,
-    alternatives: z.array(TreeAlternativeSchema).max(100),
-  })
-  .strict();
-const TreeVersionSchema = z
-  .object({
-    id: TreeIdSchema,
-    parentId: TreeIdSchema.nullable(),
-    name: z.string().max(2_000),
-    branch: z.string().max(2_000),
-    commit: z.string().max(2_000),
-    createdAt: z.string().max(100),
-    status: z.enum(["ready", "queued", "working", "complete", "failed"]),
-    summary: TreeTextSchema,
-    decisions: z.array(TreeDecisionSchema).max(200),
-    forkOrigin: z
-      .object({
-        decisionId: TreeIdSchema,
-        fromAlternativeId: TreeIdSchema,
-        toAlternativeId: TreeIdSchema,
-      })
-      .strict()
-      .optional(),
-    runId: TreeIdSchema.optional(),
-    changedFiles: z.number().int().nonnegative().optional(),
-  })
-  .strict();
-const TreeRunResultSchema = z
-  .object({
-    changeKind: z.enum(["measured", "simulated"]),
-    changedFileCount: z.number().int().nonnegative(),
-    changedFiles: z.array(z.string().max(240)).max(40),
-    changedFilesTruncated: z.boolean(),
-    checks: z
-      .array(
-        z
-          .object({
-            id: TreeIdSchema,
-            label: z.string().max(2_000),
-            detail: TreeTextSchema,
-            status: z.enum(["passed", "simulated"]),
-          })
-          .strict(),
-      )
-      .max(1_000),
-  })
-  .strict();
-const TreeRunSchema = z
-  .object({
-    id: TreeIdSchema,
-    versionId: TreeIdSchema,
-    mode: z.enum(["preview", "codex"]),
-    phase: z.enum(["queued", "preparing", "generating", "verifying", "complete", "failed"]),
-    progress: z.number().finite().min(0).max(100),
-    startedAt: z.string().max(100),
-    completedAt: z.string().max(100).optional(),
-    error: TreeTextSchema.optional(),
-    result: TreeRunResultSchema.optional(),
-    logs: z
-      .array(
-        z
-          .object({
-            id: TreeIdSchema,
-            at: z.string().max(100),
-            message: TreeTextSchema,
-            tone: z.enum(["muted", "active", "success", "error"]),
-          })
-          .strict(),
-      )
-      .max(10_000),
-  })
-  .strict();
-const TreeWorkspaceSchema = z
-  .object({
-    project: z
-      .object({
-        id: TreeIdSchema,
-        name: z.string().max(2_000),
-        description: TreeTextSchema,
-        repository: z.string().max(4_096),
-        defaultBranch: z.string().max(2_000),
-      })
-      .strict(),
-    runner: z
-      .object({
-        mode: z.enum(["preview", "codex"]),
-        available: z.boolean(),
-        label: z.string().max(2_000),
-        detail: TreeTextSchema,
-      })
-      .strict(),
-    versions: z.array(TreeVersionSchema).max(5_000),
-    runs: z.array(TreeRunSchema).max(5_000),
-    updatedAt: z.string().max(100),
-  })
-  .strict();
-
-const TreeForkResponseSchema = z
-  .object({
-    runId: z.string().min(1).max(200),
-    versionId: z.string().min(1).max(200),
-    workspace: TreeWorkspaceSchema,
-  })
-  .strict();
 
 const ISOLATED_TOOL_ENV = {
   LANG: "C.UTF-8",
@@ -322,6 +202,7 @@ export class IntegrationRegistry {
   readonly #treeServices = new Map<string, Promise<TreeCompleteService>>();
   readonly #alignInitializations = new Map<string, Promise<AlignStatus>>();
   readonly #driftMutations = new Map<string, Promise<unknown>>();
+  readonly #slideGen: SlideGenService | null;
   #closed = false;
   #closing: Promise<void> | null = null;
 
@@ -329,7 +210,11 @@ export class IntegrationRegistry {
     readonly config: InProgressConfig["integrations"],
     readonly projects: ProjectRegistry,
     readonly dataDir: string,
-  ) {}
+  ) {
+    this.#slideGen = config.slideGen
+      ? new SlideGenService(config.slideGen, projects, dataDir)
+      : null;
+  }
 
   async dispatch(
     projectId: string,
@@ -341,7 +226,10 @@ export class IntegrationRegistry {
       | "drift.importSession"
       | "drift.analyze"
       | "tree-complete.workspace"
-      | "tree-complete.createFork",
+      | "tree-complete.createFork"
+      | "slide-gen.status"
+      | "slide-gen.generate"
+      | "slide-gen.render",
     params: unknown,
   ): Promise<unknown> {
     if (this.#closed) throw new HttpError(503, "Integration registry is closed");
@@ -366,6 +254,21 @@ export class IntegrationRegistry {
       }
       case "tree-complete.createFork":
         return await this.#treeCreateFork(projectId, params);
+      case "slide-gen.status": {
+        z.undefined().parse(params);
+        if (!this.#slideGen) throw new HttpError(503, "slide-gen integration is not configured");
+        return await this.#slideGen.status(projectId);
+      }
+      case "slide-gen.generate": {
+        z.undefined().parse(params);
+        if (!this.#slideGen) throw new HttpError(503, "slide-gen integration is not configured");
+        return await this.#slideGen.generate(projectId);
+      }
+      case "slide-gen.render": {
+        z.undefined().parse(params);
+        if (!this.#slideGen) throw new HttpError(503, "slide-gen integration is not configured");
+        return await this.#slideGen.render(projectId);
+      }
     }
   }
 
@@ -801,6 +704,7 @@ export class IntegrationRegistry {
     this.#alignInitializations.clear();
     const driftMutations = [...this.#driftMutations.values()];
     this.#driftMutations.clear();
+    const slideClose = this.#slideGen?.close();
     const pending = [...this.#treeServices.values()];
     this.#treeServices.clear();
     this.#closing = (async () => {
@@ -809,13 +713,14 @@ export class IntegrationRegistry {
       const failures: unknown[] = services.flatMap((result) =>
         result.status === "rejected" ? [result.reason] : [],
       );
-      const closeResults = await Promise.allSettled(
-        services.flatMap((result) =>
+      const closeResults = await Promise.allSettled([
+        ...services.flatMap((result) =>
           result.status === "fulfilled"
             ? [Promise.resolve().then(async () => await result.value.close())]
             : [],
         ),
-      );
+        ...(slideClose ? [slideClose] : []),
+      ]);
       failures.push(
         ...closeResults.flatMap((result) => (result.status === "rejected" ? [result.reason] : [])),
       );

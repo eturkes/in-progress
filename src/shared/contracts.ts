@@ -1,82 +1,15 @@
 import { z } from "zod";
+import type {
+  NotificationEvent,
+  PluginCapability,
+  PluginManifest,
+  ProjectMetadata,
+} from "@in-progress/protocol";
+import { EventKindSchema } from "@in-progress/protocol";
 
-export const PLUGIN_API_VERSION = "1.0" as const;
+export * from "@in-progress/protocol";
 
-const PluginAssetPathSchema = z
-  .string()
-  .min(1)
-  .max(512)
-  .regex(
-    /^(?:[A-Za-z0-9][A-Za-z0-9._-]*\/)*[A-Za-z0-9][A-Za-z0-9._-]*$/,
-    "Asset must be a relative public-file path without hidden segments",
-  );
-
-export const PluginCapabilitySchema = z.enum([
-  "project.metadata",
-  "project.tree",
-  "project.readText",
-  "project.git",
-  "host.notify",
-  "align.status",
-  "drift.render",
-  "drift.validateTraces",
-  "drift.recentSessions",
-  "drift.importSession",
-  "drift.analyze",
-  "tree-complete.workspace",
-  "tree-complete.createFork",
-]);
-
-export type PluginCapability = z.infer<typeof PluginCapabilitySchema>;
-
-export const PluginManifestSchema = z
-  .object({
-    apiVersion: z.literal(PLUGIN_API_VERSION),
-    id: z
-      .string()
-      .regex(/^[a-z][a-z0-9-]{1,62}$/)
-      .refine((id) => id !== "terminal", 'Plugin id "terminal" is reserved'),
-    name: z.string().min(1).max(48),
-    version: z.string().regex(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/),
-    description: z.string().max(180),
-    entry: z
-      .string()
-      .min(1)
-      .max(240)
-      .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*\.html?$/i, "Entry must be a top-level HTML filename"),
-    assets: z
-      .array(PluginAssetPathSchema)
-      .max(20_000)
-      .default([])
-      .refine((values) => new Set(values).size === values.length, "Assets must be unique"),
-    icon: z.enum(["blocks", "chart", "files", "git-branch", "globe", "sparkles"]).default("blocks"),
-    capabilities: z
-      .array(PluginCapabilitySchema)
-      .max(16)
-      .default([])
-      .refine((values) => new Set(values).size === values.length, "Capabilities must be unique"),
-  })
-  .strict()
-  .superRefine((manifest, context) => {
-    if (manifest.assets.includes(manifest.entry)) {
-      context.addIssue({
-        code: "custom",
-        message: "Entry document must not also be a public asset",
-        path: ["assets"],
-      });
-    }
-  });
-
-export type PluginManifest = z.infer<typeof PluginManifestSchema>;
-
-export interface ProjectDto {
-  id: string;
-  name: string;
-  displayPath: string;
-  color: string;
-  branch: string | null;
-  available: boolean;
-}
+export type ProjectDto = ProjectMetadata;
 
 export interface PluginDto {
   id: string;
@@ -99,19 +32,7 @@ export interface TerminalSessionDto {
   exitCode?: number;
 }
 
-export const EventKindSchema = z.enum(["needs-input", "completed", "failed", "system"]);
-export type EventKind = z.infer<typeof EventKindSchema>;
-
-export interface EventDto {
-  id: string;
-  projectId: string | null;
-  kind: EventKind;
-  title: string;
-  body: string;
-  url: string;
-  createdAt: string;
-  readAt: string | null;
-}
+export type EventDto = NotificationEvent;
 
 export interface BootstrapDto {
   apiVersion: 1;
@@ -183,70 +104,7 @@ export const AlignSetupRequestSchema = z
       ),
   })
   .strict();
-
 export type AlignSetupRequest = z.infer<typeof AlignSetupRequestSchema>;
-
-export const DriftTracePathSchema = z
-  .string()
-  .min(1)
-  .max(1_024)
-  .refine((value) => !value.includes("\0"), "Drift trace path cannot contain a null byte")
-  .refine((value) => !hasLoneSurrogate(value), "Drift trace path cannot contain a lone surrogate")
-  .refine(
-    (value) =>
-      !value.startsWith("/") &&
-      value.split("/").every((segment) => segment !== "" && segment !== "." && segment !== ".."),
-    "Drift trace path must be project-relative",
-  )
-  .regex(/\.jsonl$/i, "Drift trace must be JSONL");
-
-export const DriftAnalyzeRequestSchema = z.object({ path: DriftTracePathSchema }).strict();
-
-export type DriftAnalyzeRequest = z.infer<typeof DriftAnalyzeRequestSchema>;
-
-export const DriftValidateTracesRequestSchema = z
-  .object({
-    paths: z
-      .array(DriftTracePathSchema)
-      .min(1)
-      .max(32)
-      .refine((paths) => new Set(paths).size === paths.length, "Drift trace paths must be unique"),
-  })
-  .strict();
-
-export type DriftValidateTracesRequest = z.infer<typeof DriftValidateTracesRequestSchema>;
-
-export interface DriftValidatedTraces {
-  paths: string[];
-}
-
-export const DriftCodexSessionIdSchema = z
-  .string()
-  .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-
-export const DriftImportSessionRequestSchema = z
-  .object({ sessionId: DriftCodexSessionIdSchema })
-  .strict();
-
-export type DriftImportSessionRequest = z.infer<typeof DriftImportSessionRequestSchema>;
-
-export interface DriftCodexSession {
-  id: string;
-  startedAt: string;
-  updatedAt: string;
-  source: string;
-  byteSize: number;
-}
-
-export interface DriftRecentSessions {
-  sessions: DriftCodexSession[];
-  truncated: boolean;
-}
-
-export interface DriftImportedSession {
-  path: string;
-  session: DriftCodexSession;
-}
 
 export function driftSessionTracePath(sessionId: string): string {
   return `.drift/traces/codex-${sessionId}.drift.jsonl`;
@@ -283,59 +141,18 @@ export const PreviewGenerationRequestSchema = z
     prompt: PreviewPromptSchema.default(""),
   })
   .strict();
-
 export type PreviewGenerationRequest = z.infer<typeof PreviewGenerationRequestSchema>;
 
 export const PreviewSettingsRequestSchema = z
-  .object({
-    mode: z.enum(["manual", "automatic"]),
-    prompt: PreviewPromptSchema.default(""),
-  })
+  .object({ mode: z.enum(["manual", "automatic"]), prompt: PreviewPromptSchema.default("") })
   .strict();
-
 export type PreviewSettingsRequest = z.infer<typeof PreviewSettingsRequestSchema>;
-
-export const TreeForkRequestSchema = z
-  .object({
-    baseVersionId: z.string().min(1).max(200),
-    decisionId: z.string().min(1).max(200),
-    alternativeId: z.string().min(1).max(200),
-  })
-  .strict();
-
-export type TreeForkRequest = z.infer<typeof TreeForkRequestSchema>;
-
-export const PluginRpcRequestSchema = z
-  .object({
-    method: z.enum([
-      "project.metadata",
-      "project.tree",
-      "project.readText",
-      "project.git",
-      "host.notify",
-      "align.status",
-      "drift.render",
-      "drift.validateTraces",
-      "drift.recentSessions",
-      "drift.importSession",
-      "drift.analyze",
-      "tree-complete.workspace",
-      "tree-complete.createFork",
-    ]),
-    params: z.unknown().optional(),
-  })
-  .strict();
-
-export type PluginRpcRequest = z.infer<typeof PluginRpcRequestSchema>;
 
 export const PushSubscriptionSchema = z
   .object({
     endpoint: z.string().url().startsWith("https://").max(2_048),
     expirationTime: z.number().nullable().optional(),
-    keys: z.object({
-      auth: z.string().min(1).max(512),
-      p256dh: z.string().min(1).max(512),
-    }),
+    keys: z.object({ auth: z.string().min(1).max(512), p256dh: z.string().min(1).max(512) }),
   })
   .strict();
 
@@ -352,55 +169,4 @@ export const NotificationEventInputSchema = z
       .default("/"),
   })
   .strict();
-
 export type NotificationEventInput = z.infer<typeof NotificationEventInputSchema>;
-
-export interface ProjectTreeEntry {
-  path: string;
-  name: string;
-  kind: "directory" | "file" | "symlink";
-  depth: number;
-  size?: number;
-}
-
-export interface GitSummary {
-  available: boolean;
-  branch: string | null;
-  upstream: string | null;
-  ahead: number;
-  behind: number;
-  staged: number;
-  modified: number;
-  untracked: number;
-  clean: boolean;
-}
-
-export interface AlignStatus {
-  initialized: boolean;
-  contract: {
-    state: "missing" | "ambiguous" | "provisional" | "accepted";
-    id: string | null;
-  };
-  latest: {
-    stage: "pre_task" | "in_progress" | "candidate_final" | "released" | null;
-    assessmentCount: number;
-    reportCount: number;
-  };
-  totals: {
-    amendments: number;
-    assessments: number;
-    checkpoints: number;
-    contracts: number;
-    reports: number;
-    snapshots: number;
-  };
-  nextAction: {
-    command: string;
-    reason: string;
-  } | null;
-}
-
-export interface DriftRender {
-  path: string;
-  text: string;
-}

@@ -1,0 +1,19 @@
+{
+  "name": "@in-progress/frontier-orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "format": "oxfmt --write src test tsconfig.json package.json",
+    "format:check": "oxfmt --check src test tsconfig.json package.json",
+    "lint": "oxlint --deny-warnings --type-aware --type-check src test",
+    "start": "bun src/main.ts",
+    "test": "bun test test",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@restatedev/restate-sdk": "1.16.5",
+    "zod": "4.4.3"
+  }
+}

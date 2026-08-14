@@ -157,16 +157,19 @@ port.postMessage({ kind: "ready", nonce });
 
 The initialization context exposes only the identity needed to label the selected project. Path and Git metadata require `project.metadata`. The host ignores window-level RPC and closes a channel on timeout, navigation, project change, or frame disposal. A navigated frame is rejected instead of receiving a replacement port; plugins implement view changes without document navigation. A `MessagePort` is a two-ended capability; see the [HTML Standard’s channel messaging model](https://html.spec.whatwg.org/multipage/web-messaging.html#channel-messaging).
 
-## SDK
+## Canonical protocol
 
-`@in-progress/plugin-sdk` implements handshake, version/capability checks, disposal, typed context,
-15-second ordinary RPC deadlines, a 75-second `drift.importSession` deadline, and the fixed 21-minute
-`drift.analyze` deadline:
+`@in-progress/protocol` owns every manifest, context, method, request, result, status, and client
+schema. Its client validates both sides of each call. It applies 15-second ordinary deadlines,
+75 seconds for `drift.importSession`, 21 minutes for `drift.analyze`, 66 minutes for
+`slide-gen.generate`, and 11 minutes for `slide-gen.render`.
 
 ```ts
-import { connectInProgress } from "@in-progress/plugin-sdk";
+import { connectInProgress } from "@in-progress/protocol/client";
 
-const host = await connectInProgress();
+const host = await connectInProgress({
+  requiredCapabilities: ["project.metadata", "project.tree", "project.git"],
+});
 const [project, tree, git] = await Promise.all([
   host.call("project.metadata"),
   host.call("project.tree", { depth: 4, limit: 800 }),
@@ -177,18 +180,23 @@ render({ project, tree, git, theme: host.context.theme });
 host.setStatus({ state: "idle", badge: null, title: "Project map" });
 ```
 
-Separate repositories may consume the built package, copy its generated declarations, or implement the small language-neutral wire contract. Do not import host application internals.
+Separate repositories consume a generated vendored copy. They must not import host application
+internals or maintain another browser transport. The root synchronization command regenerates every
+pinned vendor and embedded static client from the same build.
 
-For an unpublished local checkout, build the SDK once and link it from the plugin repository:
+For an unpublished local checkout, build and link the protocol package:
 
 ```sh
-pnpm --dir /absolute/path/to/in-progress build:sdk
-pnpm add file:/absolute/path/to/in-progress/packages/plugin-sdk
+pnpm --dir /absolute/path/to/in-progress build:protocol
+pnpm add file:/absolute/path/to/in-progress/packages/plugin-protocol
 ```
+
+Pinned ecosystem maintainers run `pnpm protocol:sync`. CI runs `pnpm protocol:check` to require
+byte-identical generated artifacts.
 
 Keep emitted asset URLs relative to the plugin root and list every emitted file other than the entry in `assets`. Vite plugins use `defineConfig({ base: "./" })`; its default root-absolute `/assets/*` targets the in-progress host instead and is blocked by plugin CSP. A single-file HTML build avoids both path and opaque-frame extension failures.
 
-Raw requests and responses on the port:
+The validated client emits these wire messages:
 
 ```ts
 // plugin → host
@@ -214,7 +222,12 @@ Permission: `project.metadata`. No parameters. Returns the initialized project D
 
 ```ts
 {
-  (id, name, displayPath, color, branch, available);
+  id: string;
+  name: string;
+  displayPath: string;
+  color: string;
+  branch: string | null;
+  available: boolean;
 }
 ```
 
@@ -556,6 +569,52 @@ aggregate on failure, and remounts the no-store iframe only after successful ato
 external artifact root is a local-only Git repository containing validated publishes, generation records,
 and aggregate output; the tool defines no remote/push path. Dashboard state is derived from a private,
 strict, sorted aggregate index rather than untrusted iframe status text.
+
+### `slide-gen.status`
+
+Permission: `slide-gen.status`. Requires the trusted host-side Slide Gen integration. No parameters.
+The response describes the selected project, operation lease, published deck/render hashes, page
+count, and latest completed receipt. Paths are artifact-root-relative.
+
+```ts
+{
+  projectId: string;
+  sourceAvailable: boolean;
+  busy: boolean;
+  deck: { path: string; sha256: string } | null;
+  render: { pdfPath: string; sha256: string; pageCount: number } | null;
+  lastReceipt: SlideGenReceipt | null;
+}
+```
+
+### `slide-gen.generate` and `slide-gen.render`
+
+Both permissions accept no parameters and require an explicit trusted-host confirmation. Generate
+runs unsandboxed Codex and can send host-readable project content to OpenAI. Render runs the fixed
+local ChromiumFish and Python sidecars. The host supplies the frame-bound canonical project,
+configured MoonBit executable, checkout, external artifact root, tool paths, arguments, and
+environment.
+
+One operation runs per canonical project. Generate must publish a validated deck and invalidate any
+older render. Render must publish contiguous 2560×1440 PNG pages and one PDF. The host reopens files
+without following symlinks, applies size/layout/header limits, computes SHA-256 values, and atomically
+records this receipt:
+
+```ts
+{
+  operationId: string;
+  kind: "generate" | "render";
+  startedAt: string;
+  finishedAt: string;
+  sourceRevision: string | null;
+  deckSha256: string | null;
+  pdfSha256: string | null;
+  pageCount: number;
+}
+```
+
+The receipt records validated publication, not one physical subprocess attempt. Host shutdown aborts
+the active process group. A browser disconnect does not cancel an admitted operation.
 
 ## Compatibility rules
 

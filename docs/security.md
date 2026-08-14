@@ -136,7 +136,7 @@ The only authority is one accepted `MessagePort` for one plugin + selected proje
 - reuses one random init nonce, accepts the first matching reply, and closes every other attempt;
 - validates every message shape and timeout;
 - checks the manifest capability on every method;
-- validates Drift's trace path/session ID and Tree Complete's three fork IDs before showing operation-specific
+- validates Drift's trace path/session ID, Tree Complete's three fork IDs, and Slide Gen's empty operation input before showing operation-specific
   trusted-host confirmation with stable plugin/project IDs immediately before every privileged request;
 - takes project identity from trusted frame state, never plugin parameters;
 - validates/canonicalizes paths again server-side;
@@ -207,6 +207,17 @@ Adding a plugin directory is a security decision. Review its manifest and built 
   manifest parsed from raw `HEAD` with replacement/graft/shallow overrides disabled, then runs
   inherited `codex --yolo exec` unsandboxed with the workstation user's full authority. Its
   confirmation states that boundary; approval is authorization, not containment.
+- Slide Gen's source, artifact root, MoonBit CLI, Codex, uv, and ChromiumFish paths come only from
+  canonical host configuration. The artifact root must be disjoint from the Slide Gen checkout and
+  every configured project. Browser operations accept no parameters. Trusted confirmation names the
+  frame-bound project and discloses unsandboxed Codex/OpenAI use or local rendering immediately before
+  dispatch. The fixed MoonBit invocation receives explicit source/artifact flags through an argv
+  array. Its sanitized environment removes API credential overrides and `GIT_*`, and exposes only
+  configured tool directories plus system paths. One operation runs per canonical project in a
+  detached process group with fixed deadlines and output caps. After success, the host opens artifacts
+  without following symlinks, validates the closed deck/render inventory, checks PNG/PDF headers and
+  page dimensions, hashes bounded files, and atomically stores a mode-`0600` receipt. This validates
+  publication shape and identity; it does not attest to slide content quality.
 - New running sessions are capped per project. Each is a same-user zmx daemon with its own Unix
   socket and terminal state; inherited `ZMX_SESSION`/`ZMX_SESSION_PREFIX` are cleared before
   naming or attaching. Anyone with the workstation user's authority can list, attach, send to, or
@@ -264,4 +275,4 @@ Browser permission must follow an explicit user gesture. On iOS/iPadOS, Web Push
 - [ ] `.data/` and config permissions exclude other local users.
 - [ ] Plugin manifests/assets and `project.readText`/`host.notify` grants were reviewed.
 - [ ] No secrets appear in notification titles/bodies.
-- [ ] `pnpm check` passes on pinned dependencies before deployment.
+- [ ] `pnpm check` and `pnpm test:e2e` pass on pinned dependencies before deployment.

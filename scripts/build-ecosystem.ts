@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -15,6 +15,7 @@ const checkouts = {
   align: resolve(pluginsRoot, "align"),
   drift: resolve(pluginsRoot, "drift"),
   preview: resolve(pluginsRoot, "preview"),
+  "slide-gen": resolve(pluginsRoot, "slide-gen"),
   "tree-complete": resolve(pluginsRoot, "tree-complete"),
   "turbo-prompt": resolve(pluginsRoot, "turbo-prompt"),
 } as const;
@@ -23,29 +24,77 @@ const projectSources = [
   ["align", checkouts.align],
   ["drift", checkouts.drift],
   ["preview", checkouts.preview],
+  ["slide-gen", checkouts["slide-gen"]],
   ["tree-complete", checkouts["tree-complete"]],
   ["turbo-prompt", checkouts["turbo-prompt"]],
 ] as const;
 const previewArtifacts = resolve(homedir(), ".local/share/in-progress/preview");
-const treePnpm = ["pnpm", "dlx", "pnpm@10.34.5"] as const;
-const treePnpmEnv = { npm_config_manage_package_manager_versions: "false" } as const;
-
+const slideArtifacts = resolve(homedir(), ".local/share/in-progress/slide-gen");
+const slideMoonHome = resolve(checkouts["slide-gen"], ".install/moon");
+const slideMoonEnv = {
+  MOON_HOME: slideMoonHome,
+  PATH: `${resolve(slideMoonHome, "bin")}:${process.env.PATH ?? "/usr/bin:/bin"}`,
+} as const;
 const installs = [
+  {
+    label: "Slide Gen dependencies",
+    cwd: checkouts["slide-gen"],
+    argv: ["pnpm", "install", "--frozen-lockfile"],
+    env: {},
+  },
   {
     label: "Tree Complete dependencies",
     cwd: checkouts["tree-complete"],
-    argv: [...treePnpm, "install", "--ignore-workspace", "--frozen-lockfile"],
-    env: treePnpmEnv,
+    argv: ["pnpm", "install", "--frozen-lockfile"],
+    env: {},
   },
   {
     label: "Turbo Prompt dependencies",
     cwd: checkouts["turbo-prompt"],
-    argv: ["npm", "ci"],
+    argv: ["pnpm", "install", "--frozen-lockfile"],
     env: {},
   },
 ] as const;
 
 const builds = [
+  {
+    label: "Slide Gen MoonBit toolchain",
+    cwd: checkouts["slide-gen"],
+    argv: ["sh", resolve(checkouts["slide-gen"], "tools/moon_toolchain.sh")],
+    env: {},
+  },
+  {
+    label: "Slide Gen MoonBit dependency",
+    cwd: checkouts["slide-gen"],
+    argv: ["sh", resolve(checkouts["slide-gen"], "tools/moon_deps.sh")],
+    env: slideMoonEnv,
+  },
+  {
+    label: "Slide Gen MoonBit resolution",
+    cwd: checkouts["slide-gen"],
+    argv: [resolve(slideMoonHome, "bin/moon"), "check", "--target", "native", "--deny-warn"],
+    env: slideMoonEnv,
+  },
+  {
+    label: "Slide Gen native core",
+    cwd: checkouts["slide-gen"],
+    argv: [
+      resolve(slideMoonHome, "bin/moon"),
+      "build",
+      "--target",
+      "native",
+      "--release",
+      "--frozen",
+      "--deny-warn",
+    ],
+    env: slideMoonEnv,
+  },
+  {
+    label: "Slide Gen plugin",
+    cwd: checkouts["slide-gen"],
+    argv: ["pnpm", "build:plugin"],
+    env: {},
+  },
   {
     label: "Drift",
     cwd: checkouts.drift,
@@ -68,14 +117,14 @@ const builds = [
   {
     label: "Turbo Prompt",
     cwd: checkouts["turbo-prompt"],
-    argv: ["npm", "run", "build"],
+    argv: ["pnpm", "build"],
     env: {},
   },
   {
     label: "Tree Complete",
     cwd: checkouts["tree-complete"],
-    argv: [...treePnpm, "build"],
-    env: treePnpmEnv,
+    argv: ["pnpm", "build"],
+    env: {},
   },
 ] as const;
 
@@ -85,6 +134,7 @@ const pluginRoots = [
   resolve(previewArtifacts, "in-progress-plugin"),
   resolve(checkouts["tree-complete"], "dist/plugin"),
   resolve(checkouts["turbo-prompt"], "dist"),
+  resolve(checkouts["slide-gen"], "dist/plugin"),
 ];
 
 for (const root of Object.values(checkouts)) {
@@ -92,6 +142,8 @@ for (const root of Object.values(checkouts)) {
     throw new Error(`Plugin submodules missing → run git submodule update --init --recursive`);
   }
 }
+
+await mkdir(slideArtifacts, { recursive: true, mode: 0o700 });
 
 for (const step of [...installs, ...builds]) {
   console.log(`→ ${step.label}: ${step.argv.join(" ")}`);
@@ -159,6 +211,8 @@ try {
   for (const project of config.projects) {
     await smokeIntegrations.dispatch(project.id, "tree-complete.workspace", undefined);
     console.log(`✓ Tree Complete host DTO: ${project.id}`);
+    await smokeIntegrations.dispatch(project.id, "slide-gen.status", undefined);
+    console.log(`✓ Slide Gen host DTO: ${project.id}`);
   }
 } finally {
   await smokeIntegrations.close();

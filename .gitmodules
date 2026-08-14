@@ -13,3 +13,6 @@
 [submodule "turbo-prompt"]
 	path = plugins/turbo-prompt
 	url = https://github.com/eturkes/turbo-prompt.git
+[submodule "slide-gen"]
+	path = plugins/slide-gen
+	url = https://github.com/eturkes/slide-gen.git

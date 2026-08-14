@@ -1,6 +1,6 @@
 import { accessSync, constants, existsSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { z } from "zod";
 import { loadTreeCompleteModule } from "./tree-complete";
 
@@ -63,6 +63,17 @@ const RawConfigSchema = z
           })
           .strict()
           .optional(),
+        slideGen: z
+          .object({
+            sourceDirectory: z.string().min(1),
+            artifactDirectory: z.string().min(1),
+            executable: z.string().min(1),
+            codexExecutable: z.string().min(1).default("/usr/bin/codex"),
+            uvExecutable: z.string().min(1).default("/usr/bin/uv"),
+            chromiumfishExecutable: z.string().min(1).default("~/.local/bin/chromiumfish"),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .default({}),
@@ -122,6 +133,14 @@ export interface InProgressConfig {
       codexExecutable: string;
     };
     treeComplete?: { sourceDirectory: string; mode: "preview" | "codex" };
+    slideGen?: {
+      sourceDirectory: string;
+      artifactDirectory: string;
+      executable: string;
+      codexExecutable: string;
+      uvExecutable: string;
+      chromiumfishExecutable: string;
+    };
   };
   terminal: {
     shell: string;
@@ -164,6 +183,19 @@ function resolveExecutable(base: string, rawPath: string, label: string): string
     throw new Error(`${label} is not executable: ${canonical}`);
   }
   return canonical;
+}
+
+function resolveNamedExecutable(
+  base: string,
+  rawPath: string,
+  label: string,
+  expectedName: string,
+): string {
+  const executable = resolveExecutable(base, rawPath, label);
+  if (basename(executable) !== expectedName) {
+    throw new Error(`${label} must resolve to an executable named ${expectedName}`);
+  }
+  return executable;
 }
 
 function isLoopback(host: string): boolean {
@@ -232,6 +264,20 @@ export async function loadConfig(
         "Codex sessions directory",
       )
     : undefined;
+  const slideGenSourceDirectory = parsed.integrations.slideGen
+    ? resolveDirectory(
+        rootDir,
+        parsed.integrations.slideGen.sourceDirectory,
+        "slide-gen source directory",
+      )
+    : undefined;
+  const slideGenArtifactDirectory = parsed.integrations.slideGen
+    ? resolveDirectory(
+        rootDir,
+        parsed.integrations.slideGen.artifactDirectory,
+        "slide-gen artifact directory",
+      )
+    : undefined;
   if (
     previewArtifactDirectory &&
     projects.some(
@@ -251,6 +297,21 @@ export async function loadConfig(
     )
   ) {
     throw new Error("Codex sessions directory must be separate from every project");
+  }
+  if (
+    slideGenArtifactDirectory &&
+    (projects.some(
+      (project) =>
+        within(project.path, slideGenArtifactDirectory) ||
+        within(slideGenArtifactDirectory, project.path),
+    ) ||
+      (slideGenSourceDirectory &&
+        (within(slideGenSourceDirectory, slideGenArtifactDirectory) ||
+          within(slideGenArtifactDirectory, slideGenSourceDirectory))))
+  ) {
+    throw new Error(
+      "slide-gen artifact directory must be separate from its source and every project",
+    );
   }
 
   const pluginDirectories = parsed.pluginDirectories.map((path) =>
@@ -351,6 +412,37 @@ export async function loadConfig(
             treeComplete: {
               sourceDirectory: treeCompleteSourceDirectory!,
               mode: parsed.integrations.treeComplete.mode,
+            },
+          }
+        : {}),
+      ...(parsed.integrations.slideGen
+        ? {
+            slideGen: {
+              sourceDirectory: slideGenSourceDirectory!,
+              artifactDirectory: slideGenArtifactDirectory!,
+              executable: resolveExecutable(
+                slideGenSourceDirectory!,
+                parsed.integrations.slideGen.executable,
+                "slide-gen executable",
+              ),
+              codexExecutable: resolveNamedExecutable(
+                rootDir,
+                parsed.integrations.slideGen.codexExecutable,
+                "slide-gen Codex executable",
+                "codex",
+              ),
+              uvExecutable: resolveNamedExecutable(
+                rootDir,
+                parsed.integrations.slideGen.uvExecutable,
+                "slide-gen uv executable",
+                "uv",
+              ),
+              chromiumfishExecutable: resolveNamedExecutable(
+                rootDir,
+                parsed.integrations.slideGen.chromiumfishExecutable,
+                "slide-gen ChromiumFish executable",
+                "chromiumfish",
+              ),
             },
           }
         : {}),

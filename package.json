@@ -5,8 +5,8 @@
   "description": "Local-first browser control plane for coding agents",
   "type": "module",
   "scripts": {
-    "build": "pnpm build:sdk && pnpm build:web && pnpm build:server",
-    "build:sdk": "tsc -p packages/plugin-sdk/tsconfig.json",
+    "build": "pnpm build:protocol && pnpm build:web && pnpm build:server",
+    "build:protocol": "pnpm --filter @in-progress/protocol build",
     "build:server": "bun build src/server/index.ts --target=bun --outdir=dist/server --sourcemap=linked",
     "build:web": "vite build",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm check:frontier",
@@ -16,25 +16,29 @@
     "dev:server": "IN_PROGRESS_WEB_PROXY=http://127.0.0.1:5173 bun --watch src/server/index.ts",
     "dev:web": "vite --host 127.0.0.1",
     "ecosystem:build": "bun scripts/build-ecosystem.ts",
-    "format": "oxfmt --write .",
-    "format:check": "oxfmt --check .",
+    "format": "oxfmt --write . '!plugins/**' '!examples/plugins/project-map/index.html'",
+    "format:check": "oxfmt --check . '!plugins/**' '!examples/plugins/project-map/index.html'",
     "frontier:config": "restate-server --config-file frontier/restate.toml --dump-config >/dev/null",
-    "frontier:e2e": "cargo build --locked --manifest-path frontier/executor/Cargo.toml && GRADLE_USER_HOME=.data/frontier/gradle frontier/orchestrator/gradlew -p frontier/orchestrator --no-daemon installDist && bun scripts/check-frontier-e2e.ts",
+    "frontier:e2e": "cargo build --locked --manifest-path frontier/executor/Cargo.toml && bun scripts/check-frontier-e2e.ts",
     "frontier:executor": "bun scripts/check-frontier-rust-toolchain.ts && cargo fmt --manifest-path frontier/executor/Cargo.toml -- --check && cargo clippy --locked --all-targets --manifest-path frontier/executor/Cargo.toml -- -D warnings && cargo test --locked --manifest-path frontier/executor/Cargo.toml",
     "frontier:model": "bun scripts/bootstrap-frontier-tools.ts && QUINT_HOME=.data/frontier/quint quint typecheck frontier/spec/execution.qnt && QUINT_HOME=.data/frontier/quint quint test frontier/spec/execution.qnt --backend=rust --verbosity=1 && QUINT_HOME=.data/frontier/quint quint run frontier/spec/execution.qnt --invariant=safety --max-samples=100000 --max-steps=30 --seed=0x5eed --backend=rust --verbosity=1 && QUINT_HOME=.data/frontier/quint quint verify frontier/spec/execution.qnt --invariant=safety --backend=tlc --verbosity=1",
-    "frontier:orchestrator": "GRADLE_USER_HOME=.data/frontier/gradle frontier/orchestrator/gradlew -p frontier/orchestrator --no-daemon test",
-    "lint": "oxlint --deny-warnings src packages scripts tests vite.config.ts",
+    "frontier:orchestrator": "pnpm --filter @in-progress/frontier-orchestrator check",
+    "lint": "oxlint --deny-warnings src packages scripts tests e2e vite.config.ts playwright.config.ts",
     "plugin:validate": "bun scripts/validate-plugin.ts",
+    "protocol:check": "pnpm build:protocol && bun scripts/sync-plugin-protocol.ts --check",
+    "protocol:sync": "pnpm build:protocol && bun scripts/sync-plugin-protocol.ts",
     "start": "bun dist/server/index.js",
     "start:ecosystem": "IN_PROGRESS_CONFIG=./in-progress.ecosystem.config.json pnpm start",
     "test": "bun test tests",
+    "test:e2e": "pnpm build && bun scripts/check-browser.ts",
     "test:watch": "bun test --watch tests",
-    "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.web.json --noEmit && tsc -p packages/plugin-sdk/tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.web.json --noEmit && tsc -p tsconfig.e2e.json --noEmit && tsc -p packages/plugin-protocol/tsconfig.json --noEmit"
   },
   "dependencies": {
     "@dnd-kit/react": "0.5.0",
     "@fontsource-variable/atkinson-hyperlegible-next": "5.3.0",
     "@fontsource/iosevka": "5.3.0",
+    "@in-progress/protocol": "workspace:*",
     "@xterm/addon-fit": "0.11.0",
     "@xterm/addon-web-links": "0.12.0",
     "@xterm/xterm": "6.0.0",
@@ -46,6 +50,7 @@
   },
   "devDependencies": {
     "@informalsystems/quint": "0.32.0",
+    "@playwright/test": "1.62.1",
     "@restatedev/restate": "1.7.3",
     "@restatedev/restate-server": "1.7.3",
     "@types/bun": "1.3.14",
@@ -56,8 +61,9 @@
     "@vitejs/plugin-react": "6.0.5",
     "bun": "1.3.14",
     "concurrently": "9.2.1",
-    "oxfmt": "0.61.0",
-    "oxlint": "1.76.0",
+    "oxfmt": "0.63.0",
+    "oxlint": "1.78.0",
+    "oxlint-tsgolint": "7.0.2001",
     "typescript": "7.0.2",
     "vite": "8.2.0",
     "vite-plugin-pwa": "1.3.0"
@@ -66,5 +72,5 @@
     "bun": ">=1.3.14",
     "node": ">=24.0.0"
   },
-  "packageManager": "pnpm@11.3.0"
+  "packageManager": "pnpm@11.21.0"
 }

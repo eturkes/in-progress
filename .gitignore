@@ -4,6 +4,9 @@ dev-dist/
 .data/
 .pnpm-store/
 coverage/
+test-results/
+playwright-report/
+blob-report/
 _apalache-out/
 frontier/orchestrator/.gradle/
 frontier/orchestrator/.kotlin/

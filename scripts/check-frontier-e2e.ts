@@ -17,11 +17,9 @@ const LOG_LIMIT_BYTES = 64 * 1024;
 
 const root = resolve(import.meta.dir, "..");
 const artifacts = {
+  bun: resolve(root, "node_modules/.bin/bun"),
   executor: resolve(root, "frontier/executor/target/debug/frontier-executor"),
-  orchestrator: resolve(
-    root,
-    "frontier/orchestrator/build/install/in-progress-frontier-orchestrator/bin/in-progress-frontier-orchestrator",
-  ),
+  orchestrator: resolve(root, "frontier/orchestrator/src/main.ts"),
   restateCli: resolve(root, "node_modules/.bin/restate"),
   restateConfig: resolve(root, "frontier/restate.toml"),
   restateServer: resolve(root, "node_modules/.bin/restate-server"),
@@ -444,7 +442,6 @@ function childEnvironment(scratch: string): NodeJS.ProcessEnv {
   return {
     CI: "1",
     HOME: resolve(scratch, "home"),
-    JAVA_HOME: process.env.JAVA_HOME,
     LANG: "C.UTF-8",
     LC_ALL: "C.UTF-8",
     NO_PROXY: "127.0.0.1,localhost,::1",
@@ -500,8 +497,9 @@ async function run(): Promise<void> {
   if (!curl) throw new Error("curl is unavailable on PATH");
   await Promise.all([
     assertExecutable("curl", curl),
+    assertExecutable("Bun", artifacts.bun),
     assertExecutable("frontier executor", artifacts.executor),
-    assertExecutable("frontier orchestrator installDist", artifacts.orchestrator),
+    assertReadable("frontier orchestrator", artifacts.orchestrator),
     assertExecutable("Restate CLI", artifacts.restateCli),
     assertExecutable("Restate server", artifacts.restateServer),
     assertReadable("Restate config", artifacts.restateConfig),
@@ -577,8 +575,8 @@ async function run(): Promise<void> {
   };
   const firstOrchestrator = startProcess(
     "frontier orchestrator (crash run)",
-    artifacts.orchestrator,
-    [],
+    artifacts.bun,
+    [artifacts.orchestrator],
     crashingEnv,
   );
   await waitForTcp("frontier orchestrator", ORCHESTRATOR_PORT, firstOrchestrator);
@@ -697,8 +695,8 @@ async function run(): Promise<void> {
   const recoveryEnv = { ...baseEnv, IN_PROGRESS_EXECUTOR_URL: executorUrl };
   const secondOrchestrator = startProcess(
     "frontier orchestrator (recovery run)",
-    artifacts.orchestrator,
-    [],
+    artifacts.bun,
+    [artifacts.orchestrator],
     recoveryEnv,
   );
   await waitForTcp("frontier orchestrator recovery", ORCHESTRATOR_PORT, secondOrchestrator);

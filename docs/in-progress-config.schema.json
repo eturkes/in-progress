@@ -150,6 +150,46 @@
               "description": "Preview writes host-owned simulation state without project/Git mutation; codex requires each project's committed .tree-complete/project.json, creates Git worktrees/branches, and runs unsandboxed Codex after explicit confirmation."
             }
           }
+        },
+        "slideGen": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sourceDirectory", "artifactDirectory", "executable"],
+          "properties": {
+            "sourceDirectory": {
+              "type": "string",
+              "minLength": 1,
+              "description": "slide-gen checkout containing templates and Python sidecars; relative paths resolve from this config file."
+            },
+            "artifactDirectory": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Existing deck/render root that is disjoint from the slide-gen checkout and every configured project."
+            },
+            "executable": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Built slide-gen native executable; relative paths resolve from the slide-gen source directory."
+            },
+            "codexExecutable": {
+              "type": "string",
+              "minLength": 1,
+              "default": "/usr/bin/codex",
+              "description": "Authenticated executable named codex. Its directory becomes the trusted operation PATH."
+            },
+            "uvExecutable": {
+              "type": "string",
+              "minLength": 1,
+              "default": "/usr/bin/uv",
+              "description": "Executable named uv for the locked Python sidecars."
+            },
+            "chromiumfishExecutable": {
+              "type": "string",
+              "minLength": 1,
+              "default": "~/.local/bin/chromiumfish",
+              "description": "Executable named chromiumfish for isolated visual rendering."
+            }
+          }
         }
       }
     },

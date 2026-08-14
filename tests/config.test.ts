@@ -44,11 +44,18 @@ describe("loadConfig", () => {
     const previewArtifacts = join(directory, "preview-artifacts");
     const drift = join(directory, "drift");
     const codexSessions = join(directory, "codex-sessions");
+    const slideGen = join(directory, "slide-gen");
+    const slideArtifacts = join(directory, "slide-artifacts");
+    const codex = join(directory, "codex");
+    const uv = join(directory, "uv");
+    const chromiumfish = join(directory, "chromiumfish");
     mkdirSync(project);
     mkdirSync(plugins);
     mkdirSync(codexSessions);
     mkdirSync(align);
     mkdirSync(treeComplete);
+    mkdirSync(slideGen);
+    mkdirSync(slideArtifacts);
     mkdirSync(join(preview, "bin"), { recursive: true });
     const previewPlugin = join(previewArtifacts, "in-progress-plugin");
     mkdirSync(previewPlugin, { recursive: true });
@@ -60,6 +67,12 @@ describe("loadConfig", () => {
     writeFileSync(join(project, ".tree-complete/project.json"), "{}\n");
     writeFileSync(drift, "binary");
     chmodSync(drift, 0o755);
+    for (const executable of [codex, uv, chromiumfish]) {
+      writeFileSync(executable, "#!/bin/sh\n");
+      chmodSync(executable, 0o755);
+    }
+    writeFileSync(join(slideGen, "slide-gen.exe"), "#!/bin/sh\n");
+    chmodSync(join(slideGen, "slide-gen.exe"), 0o755);
     writeFileSync(join(preview, "bin/preview"), "#!/bin/sh\n");
     chmodSync(join(preview, "bin/preview"), 0o755);
     symlinkSync("plugin-dist", join(directory, "plugins"));
@@ -80,6 +93,14 @@ describe("loadConfig", () => {
           codexExecutable: "./drift",
         },
         treeComplete: { sourceDirectory: "./tree-complete", mode: "codex" },
+        slideGen: {
+          sourceDirectory: "./slide-gen",
+          artifactDirectory: "./slide-artifacts",
+          executable: "./slide-gen.exe",
+          codexExecutable: "./codex",
+          uvExecutable: "./uv",
+          chromiumfishExecutable: "./chromiumfish",
+        },
       },
     });
 
@@ -112,6 +133,14 @@ describe("loadConfig", () => {
         codexExecutable: realpathSync(drift),
       },
       treeComplete: { sourceDirectory: realpathSync(treeComplete), mode: "codex" },
+      slideGen: {
+        sourceDirectory: realpathSync(slideGen),
+        artifactDirectory: realpathSync(slideArtifacts),
+        executable: realpathSync(join(slideGen, "slide-gen.exe")),
+        codexExecutable: realpathSync(codex),
+        uvExecutable: realpathSync(uv),
+        chromiumfishExecutable: realpathSync(chromiumfish),
+      },
     });
     expect(config.server).toEqual({
       host: "127.0.0.1",
@@ -252,6 +281,35 @@ describe("loadConfig", () => {
 
     await expect(loadConfig(configPath)).rejects.toThrow(
       "Codex sessions directory must be separate from every project",
+    );
+  });
+
+  test("requires slide-gen artifacts to be disjoint from its source and every project", async () => {
+    const directory = root();
+    const project = join(directory, "workspace");
+    const slideGen = join(directory, "slide-gen");
+    mkdirSync(project);
+    mkdirSync(slideGen);
+    const executable = join(slideGen, "slide-gen.exe");
+    writeFileSync(executable, "#!/bin/sh\n");
+    chmodSync(executable, 0o755);
+    const configPath = join(directory, "in-progress.config.json");
+    writeJson(configPath, {
+      projects: [{ id: "demo", name: "Demo", path: "workspace" }],
+      integrations: {
+        slideGen: {
+          sourceDirectory: "slide-gen",
+          artifactDirectory: "workspace",
+          executable: "slide-gen.exe",
+          codexExecutable: "codex",
+          uvExecutable: "uv",
+          chromiumfishExecutable: "chromiumfish",
+        },
+      },
+    });
+
+    await expect(loadConfig(configPath)).rejects.toThrow(
+      "slide-gen artifact directory must be separate from its source and every project",
     );
   });
 

@@ -40,6 +40,12 @@
       "name": "Turbo Prompt",
       "path": "./plugins/turbo-prompt",
       "color": "#315ed4"
+    },
+    {
+      "id": "slide-gen",
+      "name": "Slide Gen",
+      "path": "./plugins/slide-gen",
+      "color": "#d06545"
     }
   ],
   "pluginDirectories": [
@@ -47,7 +53,8 @@
     "./plugins/drift/plugin",
     "~/.local/share/in-progress/preview/in-progress-plugin",
     "./plugins/tree-complete/dist/plugin",
-    "./plugins/turbo-prompt/dist"
+    "./plugins/turbo-prompt/dist",
+    "./plugins/slide-gen/dist/plugin"
   ],
   "integrations": {
     "align": {
@@ -66,6 +73,14 @@
     "treeComplete": {
       "sourceDirectory": "./plugins/tree-complete",
       "mode": "preview"
+    },
+    "slideGen": {
+      "sourceDirectory": "./plugins/slide-gen",
+      "artifactDirectory": "~/.local/share/in-progress/slide-gen",
+      "executable": "./_build/native/release/build/cmd/slide-gen/slide-gen.exe",
+      "codexExecutable": "/usr/bin/codex",
+      "uvExecutable": "/usr/bin/uv",
+      "chromiumfishExecutable": "~/.local/bin/chromiumfish"
     }
   },
   "terminal": {

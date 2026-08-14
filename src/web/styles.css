@@ -2339,7 +2339,7 @@ kbd {
 .palette-group > button {
   display: grid;
   width: 100%;
-  min-height: 43px;
+  min-height: 44px;
   grid-template-columns: 22px minmax(120px, auto) 1fr;
   align-items: center;
   gap: 8px;
@@ -2730,8 +2730,8 @@ kbd {
   }
 
   .theme-button {
-    width: 42px;
-    height: 42px;
+    width: 44px;
+    height: 44px;
     justify-content: center;
     padding: 0;
     border-color: transparent;
@@ -2773,8 +2773,8 @@ kbd {
   }
 
   .notification-button {
-    width: 42px;
-    height: 42px;
+    width: 44px;
+    height: 44px;
   }
 
   .plugin-tabs {
@@ -2808,8 +2808,8 @@ kbd {
   }
 
   .new-session {
-    width: 42px;
-    height: 42px;
+    width: 44px;
+    height: 44px;
     margin: 0 2px;
   }
 

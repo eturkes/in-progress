@@ -14,7 +14,7 @@ export type PluginAuthorityDecision =
 
 const AUTHORITY_POLICY: Record<
   PluginCapability,
-  "none" | "drift-analyze" | "drift-import" | "tree-fork"
+  "none" | "drift-analyze" | "drift-import" | "tree-fork" | "slide-generate" | "slide-render"
 > = {
   "project.metadata": "none",
   "project.tree": "none",
@@ -29,6 +29,9 @@ const AUTHORITY_POLICY: Record<
   "drift.analyze": "drift-analyze",
   "tree-complete.workspace": "none",
   "tree-complete.createFork": "tree-fork",
+  "slide-gen.status": "none",
+  "slide-gen.generate": "slide-generate",
+  "slide-gen.render": "slide-render",
 };
 
 function visibleLabel(value: string): string {
@@ -127,6 +130,28 @@ function confirmDriftSessionImport(
   );
 }
 
+function confirmSlideOperation(
+  kind: "generate" | "render",
+  pluginName: string,
+  pluginId: string,
+  projectName: string,
+  projectId: string,
+  confirm: (message: string) => boolean,
+): boolean {
+  const identity = [
+    `Plugin: ${visibleLabel(pluginName)}`,
+    `Plugin ID: ${visibleId(pluginId)}`,
+    `Project: ${visibleLabel(projectName)}`,
+    `Project ID: ${visibleId(projectId)}`,
+    `Operation: ${kind}`,
+  ].join("\n");
+  const effect =
+    kind === "generate"
+      ? "This runs Codex without a sandbox, sends project content to OpenAI, and replaces the published deck after validation."
+      : "This runs ChromiumFish and replaces the project's derived page images and PDF after validation.";
+  return confirm(`slide-gen ${kind}\n\n${identity}\n\n${effect}\n\nContinue?`);
+}
+
 export function authorizePluginRequest(
   method: PluginCapability,
   params: unknown,
@@ -172,6 +197,14 @@ export function authorizePluginRequest(
       return { allowed: false, error: "Drift session import canceled by the user" };
     }
     return { allowed: true, params: request.data };
+  }
+  if (policy === "slide-generate" || policy === "slide-render") {
+    if (params !== undefined) return { allowed: false, error: "Invalid slide-gen request" };
+    const kind = policy === "slide-generate" ? "generate" : "render";
+    if (!confirmSlideOperation(kind, pluginName, pluginId, projectName, projectId, confirm)) {
+      return { allowed: false, error: `slide-gen ${kind} canceled by the user` };
+    }
+    return { allowed: true, params: undefined };
   }
   const request = TreeForkRequestSchema.safeParse(params);
   if (!request.success) {

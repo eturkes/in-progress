@@ -9,17 +9,14 @@ in-progress is a remote shell. It deliberately binds loopback and expects privat
 - Bun `1.3.14`: `Bun.serve`, native WebSockets/PTYs, `bun:sqlite`
 - zmx `0.7.0+`: one persistent, named PTY daemon per Terminal session
 - React 19 + Vite 8 PWA + xterm.js 6
-- TypeScript 7, pnpm `11.3.0`
-- External views: local static bundles in opaque-origin sandboxed iframes; versioned `MessageChannel` RPC
+- TypeScript 7, pnpm `11.21.0`, Oxlint, and Oxfmt
+- External views: opaque-origin static iframes over one Zod-owned `@in-progress/protocol`
 - State: ignored `.data/in-progress.db`; no account, cloud database, or telemetry
-- Frontier lab: Kotlin/Restate durable workflows + Rust idempotent effect executor + Quint model
+- Frontier lab: Bun/TypeScript Restate workflows + Rust idempotent effect executor + Quint model
 
 ## Start
 
-Prerequisites: Bun 1.3.14+, [zmx](https://github.com/neurosnap/zmx) 0.7.0+, Node 24+, pnpm 11.3.0+, Python 3.11+, JDK 26.0.2,
-Rust/Cargo 1.97.1, Linux x86-64, and optionally Tailscale on the host and phone. Python/Rust build
-the plugin ecosystem; JDK/Rust are used by the frontier gate. Preview generation additionally
-requires a Codex CLI logged in through ChatGPT.
+Prerequisites: Bun 1.3.14+, [zmx](https://github.com/neurosnap/zmx) 0.7.0+, Node 24+, pnpm 11.21.0+, Python 3.11+, uv, Rust/Cargo 1.97.1, ChromiumFish, and Linux x86-64. Tailscale is optional on the host and phone. The ecosystem build bootstraps slide-gen's pinned MoonBit toolchain locally. Preview and slide generation require a Codex CLI logged in through ChatGPT.
 
 ```sh
 pnpm install
@@ -114,7 +111,7 @@ Add a built directory containing `in-progress.plugin.json` to `pluginDirectories
 
 Installation trusts a plugin with data returned by its declared capabilities. The opaque-origin sandbox protects host cookies, DOM, and privileged APIs, but cannot stop the frame from disclosing granted data through its own navigation; review and pin plugin builds.
 
-The reference view lives at `examples/plugins/project-map`. See [plugin system](docs/plugin-system.md) for the manifest, RPC protocol, SDK, and separate-repository workflow.
+The reference view lives at `examples/plugins/project-map`. See [plugin system](docs/plugin-system.md) for the manifest, canonical protocol, and separate-repository workflow.
 
 ### Pinned plugin ecosystem
 
@@ -125,10 +122,9 @@ exposes each submodule in the project rail. Select the owning project before ope
 starting Codex so its shell begins at that repository root.
 
 Initialize the pinned revisions, build the installable outputs, then start with the ecosystem
-configuration. The build installs Tree Complete and Turbo Prompt from their locked dependency
-graphs before compiling all derived assets; Tree Complete uses its declared pnpm `10.34.5`. It also
-creates the external Preview artifact root and an initially empty aggregate when no dashboards have
-been generated.
+configuration. The build installs each JavaScript project from its frozen pnpm 11 graph. It also
+bootstraps slide-gen's checksum-pinned MoonBit compiler. Preview and slide-gen publish only into
+their configured external artifact roots.
 
 ```sh
 git submodule update --init --recursive
@@ -144,8 +140,9 @@ pnpm dev:ecosystem
 | Preview       | Selects, generates, or updates the active project's validated dashboard       | Fixed read-only Codex authoring        |
 | Tree Complete | Explores/forks project-identified decision lineage; default simulates locally | Narrow embedded workspace/fork service |
 | Turbo Prompt  | Builds prompts from host-bound metadata, tree, instructions, and manifests    | Bounded project reads                  |
+| Slide Gen     | Generates validated decks and renders page images plus a PDF                  | Fixed MoonBit generate/render adapter  |
 
-The build command compiles Drift, Preview, Tree Complete, and Turbo Prompt, then validates all five
+The build command compiles Drift, Preview, Tree Complete, Turbo Prompt, and Slide Gen, then validates all six
 manifests with the host validator. Each submodule still owns its full native quality gate. Preview's
 published models, compiled dashboards, stages, locks, and aggregate plugin live under
 `~/.local/share/in-progress/preview`, disjoint from every configured project. The build initializes
@@ -206,11 +203,18 @@ Tree Complete pessimistically budgets every accepted fork's terminal public stat
 envelope under the host's 4 MiB limit. At the boundary it rejects before reservation with `429`,
 leaving the readable retained history unchanged.
 
+Slide Gen keeps its MoonBit discovery, validation, publication, and render orchestration. The host
+passes the selected canonical project as `--source` and a disjoint artifact root as
+`--artifact-root`. The browser cannot supply paths, executables, arguments, or model settings.
+Generate confirmation discloses unsandboxed Codex execution and OpenAI transfer. Render confirmation
+discloses local ChromiumFish execution. Both operations serialize per project. The host validates
+deck/PDF/page layouts and hashes, then atomically records an operation receipt under `.data/slide-gen/`.
+
 ## Frontier durable execution lab
 
 `frontier/` is an isolated next-architecture slice; it does not replace the production Bun routes.
-It proves a Kotlin/Restate durable workflow calling a Rust operation executor with an immutable
-SQLite receipt. The full subprocess gate kills the Kotlin endpoint after executor commit, restarts
+It proves a Bun/TypeScript Restate workflow calling a Rust operation executor with an immutable
+SQLite receipt. The full subprocess gate kills the Bun endpoint after executor commit, restarts
 it, and verifies Restate completion through receipt replay. See the [frontier design and exact
 guarantee](frontier/README.md).
 
@@ -219,11 +223,12 @@ guarantee](frontier/README.md).
 | Command                          | Purpose                                      |
 | -------------------------------- | -------------------------------------------- |
 | `pnpm dev`                       | API watch mode + Vite dev server             |
-| `pnpm build`                     | SDK, PWA, and Bun server bundles             |
+| `pnpm build`                     | Protocol, PWA, and Bun server bundles        |
 | `pnpm start`                     | Run the production bundle                    |
 | `pnpm check`                     | Format, lint, types, tests, production build |
-| `pnpm check:frontier`            | Formal, Kotlin, Rust, and crash-replay gates |
-| `pnpm ecosystem:build`           | Build + validate five pinned plugin outputs  |
+| `pnpm test:e2e`                  | Production ChromiumFish browser gate         |
+| `pnpm check:frontier`            | Quint, TypeScript, Rust, and replay gates    |
+| `pnpm ecosystem:build`           | Build + validate six pinned plugin outputs   |
 | `pnpm dev:ecosystem`             | Run dev host with the pinned ecosystem       |
 | `pnpm start:ecosystem`           | Run built host with the pinned ecosystem     |
 | `pnpm plugin:validate -- <path>` | Validate a plugin root/manifest              |

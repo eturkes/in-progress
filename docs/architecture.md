@@ -2,17 +2,17 @@
 
 ## Decisions
 
-| Concern         | Decision                                                                                            |
-| --------------- | --------------------------------------------------------------------------------------------------- |
-| Runtime         | Pinned Bun + TypeScript; one unprivileged process                                                   |
-| HTTP/realtime   | Native `Bun.serve` + native binary WebSockets/SSE                                                   |
-| Terminal        | Named zmx PTY per session; `Bun.Terminal` bridge; xterm.js in the trusted host UI                   |
-| UI              | React/Vite installable PWA; responsive project rail + plugin rail + view pane                       |
-| Persistence     | `bun:sqlite` application state + zmx PTY daemons recovered by deterministic ownership names         |
-| Remote boundary | Loopback HTTP behind private Tailscale Serve HTTPS                                                  |
-| Plugins         | Local static directories; forced opaque iframe origin; project-bound `MessageChannel` capabilities  |
-| Integrations    | Optional host-owned fixed adapters for Align, Drift, Preview, and Tree Complete; no generic backend |
-| Notifications   | SQLite inbox + SSE foreground delivery + VAPID Web Push background delivery                         |
+| Concern         | Decision                                                                                           |
+| --------------- | -------------------------------------------------------------------------------------------------- |
+| Runtime         | Pinned Bun + TypeScript; one unprivileged process                                                  |
+| HTTP/realtime   | Native `Bun.serve` + native binary WebSockets/SSE                                                  |
+| Terminal        | Named zmx PTY per session; `Bun.Terminal` bridge; xterm.js in the trusted host UI                  |
+| UI              | React/Vite installable PWA; responsive project rail + plugin rail + view pane                      |
+| Persistence     | `bun:sqlite` application state + zmx PTY daemons recovered by deterministic ownership names        |
+| Remote boundary | Loopback HTTP behind private Tailscale Serve HTTPS                                                 |
+| Plugins         | Local static directories; forced opaque iframe origin; project-bound `MessageChannel` capabilities |
+| Integrations    | Fixed adapters for Align, Drift, Preview, Tree Complete, and Slide Gen; no generic backend         |
+| Notifications   | SQLite inbox + SSE foreground delivery + VAPID Web Push background delivery                        |
 
 Bun keeps the host bridge addon-free: `Bun.spawn` attaches the zmx client to a real outer PTY,
 `Bun.serve` owns HTTP/WebSocket lifecycle and limits, and `bun:sqlite` supplies a synchronous embedded
@@ -21,7 +21,7 @@ database. zmx owns one daemon and inner PTY per live Terminal. Primary reference
 ## Frontier execution lab
 
 `frontier/` is a gated experiment, not a production request path. It partitions durable workflow
-policy into Kotlin/Restate, high-authority effect commit into a loopback Rust executor, and lifecycle
+policy into Bun/TypeScript Restate, high-authority effect commit into a loopback Rust executor, and lifecycle
 safety into Quint/TLC. TypeScript/Bun continues to own the browser, plugins, API, and interactive
 PTYs. The first operation commits only a probe receipt; it establishes request binding, replay, and
 crash recovery without granting arbitrary process authority. [Frontier details](../frontier/README.md)
@@ -68,8 +68,10 @@ Development substitutes Vite at `IN_PROGRESS_WEB_PROXY=http://127.0.0.1:5173`; a
 6. in Tree Complete Codex mode, load the canonical built preflight and strictly validate each
    project's manifest from exact committed `HEAD`;
 7. require Preview's canonical artifact root to be disjoint from every configured project;
-8. require zmx 0.7.0+ and recover live Terminal names owned by the canonical config path;
-9. place database state in `<config-root>/.data`.
+8. require Slide Gen's canonical artifact root to be disjoint from its source and every project;
+9. resolve Slide Gen's MoonBit CLI, Codex, uv, and ChromiumFish executables from host configuration;
+10. require zmx 0.7.0+ and recover live Terminal names owned by the canonical config path;
+11. place database state in `<config-root>/.data`.
 
 The machine-readable contract is [in-progress-config.schema.json](in-progress-config.schema.json).
 
@@ -80,8 +82,9 @@ Project configuration is static for a server run. Each project record supplies t
 Integration configuration is also static and host-owned. Align gets fixed status plus one-shot local
 initialization invocations; Drift gets project-matched Codex-session discovery, confirmed local import,
 fixed trace analysis, and validating render; Preview gets one project-bound
-external generate/package operation; Tree Complete loads one built embedded service per selected
-project with host-fixed project/data roots and runner mode. Static plugin manifests grant access to
+external generate/package operation; Tree Complete loads one direct typed service per selected
+project with host-fixed project/data roots and runner mode. Slide Gen gets fixed status, generation,
+and render operations over a separate artifact root. Static plugin manifests grant access to
 named read methods but cannot configure code, argv, paths, models, or mode. Alignment's iframe stays
 read-only; trusted host chrome owns exact-intent entry, local-write confirmation, fixed initialization,
 and verified remount. Drift's iframe can request one opaque discovered session ID; trusted confirmation
@@ -96,7 +99,9 @@ standalone local Git history with no configured remote or push operation. Persis
 threads remain outside this bounded path: continuity is explicit artifact input rather than hidden global
 session state. Inventory + generation metadata publish in one private aggregate index, preventing status
 from combining a newer loose bundle record with an older aggregate after packaging failure. Tree fork mutation separately crosses a trusted
-confirmation containing configured mode and validated fork IDs.
+confirmation containing configured mode and validated fork IDs. Slide operations accept no browser
+parameters. Trusted confirmation precedes fixed MoonBit execution. The host serializes by canonical
+project, validates closed deck/render layouts and hashes, and persists atomic operation receipts.
 
 `POST /api/projects/:project/sessions` creates:
 
@@ -184,7 +189,7 @@ Core routes:
 
 The authenticated entry and manifest-declared assets are served from `/plugins/:id/`; undeclared plugin-root files remain private. Document CSP includes `sandbox allow-scripts`; the host iframe also has `sandbox="allow-scripts"`. Omitting `allow-same-origin` changes the child to a unique opaque origin even though its URL shares the host origin. It therefore has no host cookies/storage/DOM access. CSP limits connections and subresources to that plugin's static URL prefix, enabling declared ES-module graphs while blocking host APIs and external endpoints. Inline code is permitted because a configured plugin is already trusted with its declared capabilities; self-contained entry documents are the most extension-compatible package. Browsers do not apply connect restrictions to document navigation, so an installed plugin can navigate its own frame to disclose data returned by granted capabilities. Plugin installation remains a confidentiality trust decision.
 
-The React host creates one `MessageChannel` per `{plugin,project}` entry load, transfers only minimal project identity, fixes project context before RPC, and brokers only manifest-declared methods. Navigation, project/view switch, or frame disposal closes the channel; a navigated frame never receives a replacement. See [plugin system](plugin-system.md).
+The React host creates one `MessageChannel` per `{plugin,project}` entry load, transfers only minimal project identity, fixes project context before RPC, and brokers only manifest-declared methods. Navigation, project/view switch, or frame disposal closes the channel; a navigated frame never receives a replacement. One Zod schema package owns the manifest, context, methods, results, browser client, and host types. Generated vendored copies and embedded clients remain byte-identical to that package. See [plugin system](plugin-system.md).
 
 ## Events and Web Push
 
