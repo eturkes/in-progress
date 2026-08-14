@@ -22,7 +22,8 @@
 - State rules, facts + warnings plainly; omit + prune provenance — dates, verification/discovery events, origin stories.
 - Future-facing text, esp. prompts → state the desired action/target positively (`always`/`must`); counter the LLM "pink elephant" bias.
 - Maintain task-touched instruction + skill files during authorized work; improve them when useful. Route durable guidance to the appropriate scope: global `~/.codex/AGENTS.md` = project-independent behavior + Codex environment/tooling + machine-specific capabilities; per-project `AGENTS.md` = generalized principles + config rules for working within projects; `.agent/memory.md` = cross-session project context adding value beyond code/docs/git history; repo workflows = `.agents/skills/`.
-- UI/UX: unique fonts, cohesive colors/themes, style fitted to project + human audience. Human-facing text = natural + direct. For humans: hyphens, flexible enumeration, varied comparatives.
+- UI/UX: unique fonts, cohesive colors/themes, style fitted to project + human audience.
+- Human-facing text = natural + direct in ASD-STE100 register: ≤20 words/sentence in instructions, ≤25 in descriptions; imperative steps, one instruction per sentence, condition before command; simple tenses, finite verbs, active voice, definite modality (`must`); terminology fixed + sentence shape varied; full forms with articles + `that`; hyphens, flexible enumeration; code + identifiers verbatim. Cut filler: `simply`, `robust`, `seamlessly`, `leverage`.
 
 ## Engineering
 
